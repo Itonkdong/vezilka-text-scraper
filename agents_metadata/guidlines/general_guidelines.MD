@@ -9,7 +9,11 @@
 - Any change to method/function logic or signature that affects behavior must include a docstring update.
 - Use project-specific custom exceptions where appropriate.
 - Add explicit error handling and failure mapping.
-- Environment-controlled variables should be loaded through the project configuration module.
+- Environment-controlled variables should be loaded through the project's shared `env_variables.py` module.
+- Environment variables must be exposed from the shared `env_variables.py` module as uppercase Python variables, such as `APP_NAME`, `LOG_LEVEL`, and `DATABASE_URL`; other modules should import and use those variables from there instead of reading `os.environ` directly.
+- Every environment variable must have a default value defined in the shared constants module, and shared `env_variables.py` must load each environment variable using that default.
+- Use `python-dotenv` through shared `env_variables.py` to load `.env` files.
+- Do not write fallback implementations for required dependencies when imports fail. Every dependency listed in project requirements is mandatory, and missing dependencies should fail plainly instead of being silently reimplemented or bypassed.
 - Shared constants used across multiple parts of the codebase must be defined in the project's shared constants module.
 - Module-local constants may stay inside the owning module when only that module uses them; avoid magic numbers and unnamed hardcoded values in implementation logic.
 - Treat environment variables and constants differently: environment variables are deployment-controlled runtime inputs such as API keys, debug flags, environment names, or similar operational configuration; constants are code-level fixed values used to keep behavior explicit and avoid duplicated literals.
