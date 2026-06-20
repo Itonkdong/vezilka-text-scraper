@@ -1,0 +1,18 @@
+# Supported categories:
+#   Биологија, Географија, Историја, Култура, Математика,
+#   Наука, Образование, Спорт, Технологија, Уметност
+categories:
+  - Географија
+  - Историја
+
+recursive: true
+max_depth: 2
+
+total_article_limit: 10
+per_category_article_limit: null
+
+include_redirects: false
+namespace: 0
+request_delay_seconds: 0.2
+continue_on_error: true
+output_run_name: null

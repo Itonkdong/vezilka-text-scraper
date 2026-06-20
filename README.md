@@ -6,7 +6,7 @@ Macedonian Wikipedia corpus builder for collecting clean, structured article tex
 
 ```bash
 conda env create -f environment.yml
-conda activate vezilka-text-scraper
+conda activate vezilka
 cp .env.example .env
 ```
 
@@ -15,7 +15,24 @@ For pip-only environments:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
+cp .env.example .env
+```
+
+Run the raw scrape job:
+
+```bash
+python -m vezilka_text_scraper.jobs.scrape
+# or
+scrape-wikipedia
+```
+
+To use a non-default configuration file:
+
+```bash
+python -m vezilka_text_scraper.jobs.scrape configs/scrape.yaml
+# or
+scrape-wikipedia configs/scrape.yaml
 ```
 
 ## Project Shape

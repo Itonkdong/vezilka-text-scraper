@@ -11,6 +11,7 @@
 - Keep service methods explicit about the boundary they own. If logic belongs to a more specific component, move it there instead of duplicating wrappers in a broader module.
 - Raise domain-specific custom exceptions for expected failures. Preserve more specific downstream exceptions instead of flattening them into generic framework errors.
 - Keep logs in services, jobs, and integration adapters for business failures, state transitions, integrations, and recoverable/internal error paths.
+- Every job must emit exactly one final structured summary log. The success summary should be visually clear and logged at `INFO`; the failure summary should be visually clear and logged at `ERROR`. Include the job name, status, configuration path, output path when available, core counts, duration, and failure reason when applicable.
 - Avoid hidden side effects in unrelated layers. If a module owns a workflow, it should be the clear entry point for that workflow.
 - Reuse existing service methods when an appropriate one already exists. If the correct domain method does not exist, add it in the appropriate owning module instead of bypassing the framework structure.
 - Design services so they can be composed for alternate crawl configurations, cleaning strategies, storage backends, exports, and corpus-quality checks without rewriting the surrounding flow.

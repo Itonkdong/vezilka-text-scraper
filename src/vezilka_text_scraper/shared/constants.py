@@ -10,6 +10,7 @@ DEFAULT_APP_NAME = "vezilka-text-scraper"
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_LOG_COLOR = True
 DEFAULT_LOG_FORMAT = "human"
+DEFAULT_LOG_DEFAULT_COLOR = "cyan"
 LOG_FORMAT_HUMAN = "human"
 LOG_FORMAT_JSON = "json"
 
@@ -21,6 +22,13 @@ DEFAULT_MEDIAWIKI_MAX_RETRIES = 3
 DEFAULT_LANGUAGE = "mk"
 DEFAULT_RECURSIVE_CATEGORY_CRAWL = True
 DEFAULT_CATEGORY_MAX_DEPTH = 2
+DEFAULT_TOTAL_ARTICLE_LIMIT = 100
+DEFAULT_PER_CATEGORY_ARTICLE_LIMIT = None
+DEFAULT_INCLUDE_REDIRECTS = False
+DEFAULT_WIKIPEDIA_NAMESPACE = 0
+DEFAULT_REQUEST_DELAY_SECONDS = 0.2
+DEFAULT_CONTINUE_ON_ERROR = True
+DEFAULT_SCRAPE_CONFIG_PATH = Path("configs/scrape.yaml")
 
 DEFAULT_DATABASE_URL = "sqlite:///data/vezilka_corpus.db"
 
@@ -29,6 +37,21 @@ DEFAULT_PROCESSED_DATA_DIR = Path("data/processed")
 DEFAULT_EXPORT_DATA_DIR = Path("data/exports")
 
 WIKIPEDIA_CANONICAL_BASE_URL = "https://mk.wikipedia.org/wiki"
+
+SUITABLE_WIKIPEDIA_CATEGORIES = frozenset(
+    {
+        "Биологија",
+        "Географија",
+        "Историја",
+        "Култура",
+        "Математика",
+        "Наука",
+        "Образование",
+        "Спорт",
+        "Технологија",
+        "Уметност",
+    }
+)
 
 STOP_SECTION_TITLES = frozenset(
     {

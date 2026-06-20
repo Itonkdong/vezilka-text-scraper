@@ -17,13 +17,19 @@ dependencies = [
     "SQLAlchemy>=2.0,<3",
     "tqdm>=4.66,<5",
     "python-dotenv>=1.0,<2",
+    "PyYAML>=6.0,<7",
 ]
+
+[project.scripts]
+scrape-wikipedia = "vezilka_text_scraper.jobs.scrape:main"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2,<9",
     "ruff>=0.5,<1",
     "mypy>=1.10,<2",
+    "types-PyYAML>=6.0,<7",
+    "types-requests>=2.32,<3",
 ]
 
 [tool.setuptools.packages.find]
@@ -35,7 +41,6 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "ANN", "C4", "SIM"]
-ignore = ["ANN101", "ANN102"]
 
 [tool.mypy]
 python_version = "3.11"

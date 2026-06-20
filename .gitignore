@@ -20,6 +20,9 @@ data/*
 !data/raw/
 !data/processed/
 !data/exports/
+data/raw/*
+data/processed/*
+data/exports/*
 !data/.gitkeep
 !data/raw/.gitkeep
 !data/processed/.gitkeep
