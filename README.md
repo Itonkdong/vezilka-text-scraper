@@ -35,6 +35,22 @@ python -m vezilka_text_scraper.jobs.scrape configs/scrape.yaml
 scrape-wikipedia configs/scrape.yaml
 ```
 
+Run the clean job:
+
+```bash
+python -m vezilka_text_scraper.jobs.clean
+# or
+clean-wikipedia
+```
+
+To use a non-default clean configuration file:
+
+```bash
+python -m vezilka_text_scraper.jobs.clean configs/clean.yaml
+# or
+clean-wikipedia configs/clean.yaml
+```
+
 ## Project Shape
 
 - `src/vezilka_text_scraper/adapters`: External systems such as MediaWiki, database storage, and exports.

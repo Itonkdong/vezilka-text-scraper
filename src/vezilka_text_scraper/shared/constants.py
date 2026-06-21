@@ -29,6 +29,14 @@ DEFAULT_WIKIPEDIA_NAMESPACE = 0
 DEFAULT_REQUEST_DELAY_SECONDS = 0.2
 DEFAULT_CONTINUE_ON_ERROR = True
 DEFAULT_SCRAPE_CONFIG_PATH = Path("configs/scrape.yaml")
+DEFAULT_CLEAN_CONFIG_PATH = Path("configs/clean.yaml")
+DEFAULT_CLEAN_INPUT_PATH = None
+DEFAULT_MIN_WORD_COUNT = 100
+DEFAULT_SKIP_DISAMBIGUATION_PAGES = True
+DEFAULT_CLEAN_OUTPUT_RUN_NAME = None
+DEFAULT_DISPLAY_CONFIG_PATH = Path("configs/display.yaml")
+DEFAULT_DISPLAY_INPUT_PATH = None
+DEFAULT_DISPLAY_ARTICLE_LIMIT = 3
 
 DEFAULT_DATABASE_URL = "sqlite:///data/vezilka_corpus.db"
 
@@ -61,5 +69,13 @@ STOP_SECTION_TITLES = frozenset(
         "Наводи",
         "Надворешни врски",
         "Референци",
+    }
+)
+
+DISAMBIGUATION_TITLE_MARKERS = frozenset(
+    {
+        "појаснување",
+        "појаснителна",
+        "појаснителница",
     }
 )

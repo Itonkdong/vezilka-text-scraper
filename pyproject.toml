@@ -22,6 +22,8 @@ dependencies = [
 
 [project.scripts]
 scrape-wikipedia = "vezilka_text_scraper.jobs.scrape:main"
+clean-wikipedia = "vezilka_text_scraper.jobs.clean:main"
+display-wikipedia = "vezilka_text_scraper.jobs.display:main"
 
 [project.optional-dependencies]
 dev = [

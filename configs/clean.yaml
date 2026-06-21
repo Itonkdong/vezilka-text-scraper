@@ -1,0 +1,15 @@
+input_path: null
+output_run_name: null
+
+min_word_count: 100
+skip_disambiguation_pages: true
+continue_on_error: true
+
+remove_templates: true
+remove_references: true
+remove_tables: true
+remove_files: true
+remove_categories: true
+remove_external_links: true
+remove_navigation_sections: true
+normalize_whitespace: true
