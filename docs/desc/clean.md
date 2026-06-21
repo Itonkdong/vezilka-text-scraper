@@ -50,6 +50,9 @@ Optional JSONL file name for the processed output. If omitted, the job writes `w
 `min_word_count`
 Minimum number of words required in the final cleaned text. Articles below this count are skipped.
 
+`min_section_word_count`
+Minimum number of words required in each cleaned section. Sections below this count are removed before the final article text is built. This helps remove table leftovers such as short labels after wiki tables are stripped.
+
 `skip_disambiguation_pages`
 Whether to skip articles whose titles look like disambiguation pages.
 

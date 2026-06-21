@@ -32,6 +32,7 @@ DEFAULT_SCRAPE_CONFIG_PATH = Path("configs/scrape.yaml")
 DEFAULT_CLEAN_CONFIG_PATH = Path("configs/clean.yaml")
 DEFAULT_CLEAN_INPUT_PATH = None
 DEFAULT_MIN_WORD_COUNT = 100
+DEFAULT_MIN_SECTION_WORD_COUNT = 10
 DEFAULT_SKIP_DISAMBIGUATION_PAGES = True
 DEFAULT_CLEAN_OUTPUT_RUN_NAME = None
 DEFAULT_DISPLAY_CONFIG_PATH = Path("configs/display.yaml")
@@ -68,6 +69,7 @@ STOP_SECTION_TITLES = frozenset(
         "Извори",
         "Наводи",
         "Надворешни врски",
+        "Поврзано",
         "Референци",
     }
 )

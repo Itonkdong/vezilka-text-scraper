@@ -8,6 +8,7 @@ from vezilka_text_scraper.shared.constants import (
     DEFAULT_CLEAN_INPUT_PATH,
     DEFAULT_CLEAN_OUTPUT_RUN_NAME,
     DEFAULT_CONTINUE_ON_ERROR,
+    DEFAULT_MIN_SECTION_WORD_COUNT,
     DEFAULT_MIN_WORD_COUNT,
     DEFAULT_SKIP_DISAMBIGUATION_PAGES,
 )
@@ -20,6 +21,7 @@ class CleanConfig(BaseModel):
     output_run_name: str | None = DEFAULT_CLEAN_OUTPUT_RUN_NAME
 
     min_word_count: int = Field(default=DEFAULT_MIN_WORD_COUNT, ge=0)
+    min_section_word_count: int = Field(default=DEFAULT_MIN_SECTION_WORD_COUNT, ge=0)
     skip_disambiguation_pages: bool = DEFAULT_SKIP_DISAMBIGUATION_PAGES
     continue_on_error: bool = DEFAULT_CONTINUE_ON_ERROR
 

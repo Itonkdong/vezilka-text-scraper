@@ -115,13 +115,16 @@ class ArticleCleaningService:
             cleaned_content = self._clean_wikitext(raw_section.content, config)
             if not cleaned_content:
                 continue
+            word_count = self._count_words(cleaned_content)
+            if word_count < config.min_section_word_count:
+                continue
 
             position = len(cleaned_sections)
             cleaned_sections.append(
                 CleanedSection(
                     heading=normalized_heading,
                     content=cleaned_content,
-                    word_count=self._count_words(cleaned_content),
+                    word_count=word_count,
                     char_count=len(cleaned_content),
                     position=position,
                 )

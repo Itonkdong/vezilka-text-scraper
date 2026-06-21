@@ -31,7 +31,7 @@ def test_cleaning_removes_wiki_noise_and_keeps_visible_text() -> None:
 | вредност
 |}
 """
-    config = CleanConfig(min_word_count=0)
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
 
     candidate = ArticleCleaningService().clean_article(
         _raw_article(raw_wikitext),
@@ -58,8 +58,14 @@ def test_cleaning_extracts_sections_and_removes_navigation_sections() -> None:
 
 == Наводи ==
 * непотребен извор
+
+== Поврзано ==
+* Ерупција
+* Видови на вулкански избув
+* Тектоника на плочите
+* Показател на вулканска избувност
 """
-    config = CleanConfig(min_word_count=0)
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
 
     candidate = ArticleCleaningService().clean_article(
         _raw_article(raw_wikitext),
@@ -70,6 +76,8 @@ def test_cleaning_extracts_sections_and_removes_navigation_sections() -> None:
     assert [section.heading for section in candidate.article.sections] == ["Географија", "Историја"]
     assert candidate.article.sections[0].content == "Воведна реченица."
     assert "Наводи" not in candidate.article.clean_text
+    assert "Поврзано" not in candidate.article.clean_text
+    assert "Тектоника на плочите" not in candidate.article.clean_text
     assert candidate.article.section_count == 2
 
 
@@ -102,7 +110,7 @@ def test_cleaning_removes_intro_etymology_explanations() -> None:
         "'''Географија''' (од [[старогрчки]]: γεω „земја“ и γραφία „опишува“) "
         "или [[земјопис]] — описна наука за планетата Земја."
     )
-    config = CleanConfig(min_word_count=0)
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
 
     candidate = ArticleCleaningService().clean_article(
         _raw_article(raw_wikitext),
@@ -124,7 +132,7 @@ def test_cleaning_keeps_list_items_with_dash_markers() -> None:
 # картографија
 # геодезија
 """
-    config = CleanConfig(min_word_count=0)
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
 
     candidate = ArticleCleaningService().clean_article(
         _raw_article(raw_wikitext),
@@ -136,3 +144,32 @@ def test_cleaning_keeps_list_items_with_dash_markers() -> None:
     assert "- антропогеографија" in candidate.article.clean_text
     assert "- картографија" in candidate.article.clean_text
     assert "- геодезија" in candidate.article.clean_text
+
+
+def test_cleaning_skips_sections_below_minimum_word_count() -> None:
+    raw_wikitext = """
+Воведна содржина со доволно зборови за да остане како корисен текст.
+
+== Некои од најголемите вулкани во светот ==
+* Сѐ уште активни
+{| class="wikitable"
+! Вулкан !! Височина !! Место
+|-
+| Котопакси || 5897 м || Еквадор
+|}
+
+== Создавање на вулкани ==
+Вулканите се места од каде што излегува вжарен карпест материјал од внатрешноста на земјата.
+"""
+    config = CleanConfig(min_word_count=0, min_section_word_count=10)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext, title="Вулкан"),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    section_headings = [section.heading for section in candidate.article.sections]
+    assert "Некои од најголемите вулкани во светот" not in section_headings
+    assert "Сѐ уште активни" not in candidate.article.clean_text
+    assert section_headings == ["Вулкан", "Создавање на вулкани"]
