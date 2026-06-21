@@ -192,3 +192,39 @@ def test_cleaning_skips_sections_below_minimum_word_count() -> None:
     assert "Некои од најголемите вулкани во светот" not in section_headings
     assert "Сѐ уште активни" not in candidate.article.clean_text
     assert section_headings == ["Вулкан", "Создавање на вулкани"]
+
+
+def test_cleaning_drops_sections_that_are_only_table_preambles() -> None:
+    raw_wikitext = """
+Почнувајќи од Северниот Пол и упатувајќи се кон југ до Јужниот Пол,
+115. западен меридијан поминува низ:
+{| class="wikitable plainrowheaders"
+! scope="col" width="130" | Координати
+! scope="col" | Држава, територија или море
+! scope="col" | Белешки
+|-
+| style="background:#b0e0e6;" |
+! scope="row" style="background:#b0e0e6;" | Северноледен Океан
+| style="background:#b0e0e6;" |
+|-
+|
+! scope="row" |
+| Северозападни Територии — Броков Остров
+|-
+| style="background:#b0e0e6;" |
+! scope="row" style="background:#b0e0e6;" | Тихи Океан
+| style="background:#b0e0e6;" | Западно од Кларион
+|-
+|}
+"""
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext, title="115. западен меридијан"),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert candidate.article.sections == []
+    assert "поминува низ" not in candidate.article.clean_text
+    assert "Северноледен Океан" not in candidate.article.clean_text

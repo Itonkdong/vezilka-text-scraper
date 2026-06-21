@@ -28,6 +28,7 @@ ETYMOLOGY_PARENTHESES_PATTERN = re.compile(
 )
 WHITESPACE_PATTERN = re.compile(r"[ \t]+")
 BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
+TABLE_SECTION_MAX_PREAMBLE_WORDS = 40
 
 
 class CleanedArticleCandidate(BaseModel):
@@ -128,6 +129,8 @@ class ArticleCleaningService:
             cleaned_content = self._clean_wikitext(raw_section.content, config)
             if not cleaned_content:
                 continue
+            if self._should_drop_table_section(raw_section.content, cleaned_content, config):
+                continue
             word_count = self._count_words(cleaned_content)
             if word_count < config.min_section_word_count:
                 continue
@@ -213,6 +216,49 @@ class ArticleCleaningService:
                 continue
             kept_lines.append(line)
         return "\n".join(kept_lines)
+
+    def _should_drop_table_section(
+        self,
+        raw_wikitext: str,
+        cleaned_content: str,
+        config: CleanConfig,
+    ) -> bool:
+        if not config.remove_tables or "{|" not in raw_wikitext:
+            return False
+
+        cleaned_word_count = self._count_words(cleaned_content)
+        if cleaned_content.rstrip().endswith(":") and (
+            cleaned_word_count <= TABLE_SECTION_MAX_PREAMBLE_WORDS
+        ):
+            return True
+
+        table_line_count, non_table_line_count = self._count_table_and_non_table_lines(
+            raw_wikitext
+        )
+        return (
+            table_line_count > non_table_line_count
+            and cleaned_word_count <= TABLE_SECTION_MAX_PREAMBLE_WORDS
+        )
+
+    def _count_table_and_non_table_lines(self, text: str) -> tuple[int, int]:
+        table_depth = 0
+        table_line_count = 0
+        non_table_line_count = 0
+        for line in text.splitlines():
+            stripped_line = line.strip()
+            if not stripped_line:
+                continue
+            if stripped_line.startswith("{|"):
+                table_depth += 1
+                table_line_count += 1
+                continue
+            if table_depth > 0:
+                table_line_count += 1
+                if stripped_line.startswith("|}"):
+                    table_depth -= 1
+                continue
+            non_table_line_count += 1
+        return table_line_count, non_table_line_count
 
     def _remove_references(self, wikicode: mwparserfromhell.wikicode.Wikicode) -> None:
         for tag in list(wikicode.filter_tags(recursive=True)):
