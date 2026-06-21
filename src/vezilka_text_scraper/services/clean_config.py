@@ -12,6 +12,7 @@ from vezilka_text_scraper.shared.constants import (
     DEFAULT_LOG_SKIPPED_ARTICLES,
     DEFAULT_MIN_SECTION_WORD_COUNT,
     DEFAULT_MIN_WORD_COUNT,
+    DEFAULT_REMOVE_CODE_SECTIONS,
     DEFAULT_SKIP_DISAMBIGUATION_PAGES,
 )
 
@@ -36,6 +37,7 @@ class CleanConfig(BaseModel):
     remove_categories: bool = True
     remove_external_links: bool = True
     remove_navigation_sections: bool = True
+    remove_code_sections: bool = DEFAULT_REMOVE_CODE_SECTIONS
     normalize_whitespace: bool = True
 
     model_config = ConfigDict(extra="forbid")

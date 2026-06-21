@@ -26,9 +26,22 @@ ETYMOLOGY_PARENTHESES_PATTERN = re.compile(
     r")[^)]*\)",
     re.IGNORECASE,
 )
+EMPTY_PARENTHESES_RANGE_PATTERN = re.compile(r"\s*\(\s*[-–—]\s*\)")
+CODE_MARKUP_PATTERN = re.compile(
+    r"</?(?:code|pre|source|syntaxhighlight|span|div|rdf:[A-Za-z0-9_-]+|"
+    r"[A-Za-z]+:[A-Za-z0-9_-]+)[^>]*>|xmlns(?::[A-Za-z0-9_-]+)?=|"
+    r"\bclass\s*=",
+    re.IGNORECASE,
+)
+CODE_LINE_PATTERN = re.compile(
+    r"^\s*(?:</?[A-Za-z][A-Za-z0-9:_-]*(?:\s+[^>]*)?>|"
+    r"[{};]|(?:public|private|class|def|function|var|let|const|import)\b)",
+    re.IGNORECASE,
+)
 WHITESPACE_PATTERN = re.compile(r"[ \t]+")
 BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
 TABLE_SECTION_MAX_PREAMBLE_WORDS = 40
+MIN_CODE_SECTION_LINES = 2
 
 
 class CleanedArticleCandidate(BaseModel):
@@ -131,6 +144,8 @@ class ArticleCleaningService:
                 continue
             if self._should_drop_table_section(raw_section.content, cleaned_content, config):
                 continue
+            if self._should_drop_code_section(raw_section.content, cleaned_content, config):
+                continue
             word_count = self._count_words(cleaned_content)
             if word_count < config.min_section_word_count:
                 continue
@@ -191,6 +206,7 @@ class ArticleCleaningService:
         cleaned_text = wikicode.strip_code(normalize=True, collapse=True)
         cleaned_text = CITATION_MARKER_PATTERN.sub("", cleaned_text)
         cleaned_text = self._remove_intro_etymology_explanations(cleaned_text)
+        cleaned_text = self._remove_empty_parentheses_ranges(cleaned_text)
         if config.normalize_whitespace:
             cleaned_text = self._normalize_whitespace(cleaned_text)
         return cleaned_text.strip()
@@ -200,6 +216,9 @@ class ArticleCleaningService:
 
     def _remove_intro_etymology_explanations(self, text: str) -> str:
         return ETYMOLOGY_PARENTHESES_PATTERN.sub("", text)
+
+    def _remove_empty_parentheses_ranges(self, text: str) -> str:
+        return EMPTY_PARENTHESES_RANGE_PATTERN.sub("", text)
 
     def _remove_tables(self, text: str) -> str:
         lines = text.splitlines()
@@ -227,38 +246,39 @@ class ArticleCleaningService:
             return False
 
         cleaned_word_count = self._count_words(cleaned_content)
-        if cleaned_content.rstrip().endswith(":") and (
-            cleaned_word_count <= TABLE_SECTION_MAX_PREAMBLE_WORDS
-        ):
-            return True
-
-        table_line_count, non_table_line_count = self._count_table_and_non_table_lines(
-            raw_wikitext
-        )
         return (
-            table_line_count > non_table_line_count
+            cleaned_content.rstrip().endswith(":")
             and cleaned_word_count <= TABLE_SECTION_MAX_PREAMBLE_WORDS
         )
 
-    def _count_table_and_non_table_lines(self, text: str) -> tuple[int, int]:
-        table_depth = 0
-        table_line_count = 0
-        non_table_line_count = 0
-        for line in text.splitlines():
-            stripped_line = line.strip()
-            if not stripped_line:
-                continue
-            if stripped_line.startswith("{|"):
-                table_depth += 1
-                table_line_count += 1
-                continue
-            if table_depth > 0:
-                table_line_count += 1
-                if stripped_line.startswith("|}"):
-                    table_depth -= 1
-                continue
-            non_table_line_count += 1
-        return table_line_count, non_table_line_count
+    def _should_drop_code_section(
+        self,
+        raw_wikitext: str,
+        cleaned_content: str,
+        config: CleanConfig,
+    ) -> bool:
+        if not config.remove_code_sections:
+            return False
+
+        if CODE_MARKUP_PATTERN.search(cleaned_content):
+            return True
+
+        code_line_count = self._count_code_like_lines(cleaned_content)
+        if code_line_count >= MIN_CODE_SECTION_LINES:
+            return True
+
+        return "{|" not in raw_wikitext and CODE_MARKUP_PATTERN.search(
+            raw_wikitext
+        ) is not None and (
+            code_line_count > 0 or self._count_words(cleaned_content) <= 80
+        )
+
+    def _count_code_like_lines(self, text: str) -> int:
+        return sum(
+            1
+            for line in text.splitlines()
+            if line.strip() and CODE_LINE_PATTERN.search(line)
+        )
 
     def _remove_references(self, wikicode: mwparserfromhell.wikicode.Wikicode) -> None:
         for tag in list(wikicode.filter_tags(recursive=True)):

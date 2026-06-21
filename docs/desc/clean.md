@@ -86,6 +86,9 @@ Keep visible external-link labels and remove URL-only links.
 `remove_navigation_sections`
 Remove sections such as `Наводи`, `Референци`, `Извори`, `Надворешни врски`, `Видете исто така`, and `Белешки`.
 
+`remove_code_sections`
+Remove sections that are primarily code or markup examples, such as RDF/XML, HTML snippets, `<code>` blocks, or similar programming-oriented fragments. This keeps the corpus focused on natural-language Macedonian prose.
+
 `normalize_whitespace`
 Normalize repeated spaces, tabs, and blank lines.
 

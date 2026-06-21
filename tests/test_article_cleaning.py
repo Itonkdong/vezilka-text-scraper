@@ -143,6 +143,23 @@ def test_cleaning_removes_intro_etymology_explanations() -> None:
     assert "Географија или земјопис" in candidate.article.clean_text
 
 
+def test_cleaning_removes_empty_parentheses_ranges() -> None:
+    raw_wikitext = (
+        "Александрин \"Алексин\" Пјетернела Франсоаз Тине ( - ), "
+        "холандски истражувач на Африка и првата жена која пробала да ја премине Сахара."
+    )
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext, title="Алексин Тине"),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert "( - )" not in candidate.article.clean_text
+    assert "Тине, холандски истражувач" in candidate.article.clean_text
+
+
 def test_cleaning_keeps_list_items_with_dash_markers() -> None:
     raw_wikitext = """
 Во географијата постојат повеќе полиња:
@@ -228,3 +245,57 @@ def test_cleaning_drops_sections_that_are_only_table_preambles() -> None:
     assert candidate.article.sections == []
     assert "поминува низ" not in candidate.article.clean_text
     assert "Северноледен Океан" not in candidate.article.clean_text
+
+
+def test_cleaning_drops_rdf_code_sections() -> None:
+    raw_wikitext = """
+Вовед со корисна географска содржина која треба да остане во текстот.
+
+== RDF-канали ==
+Методот на RDF е утврден од Групата W3 и ги претставува информациите во облик на RDF-ознаки:
+<rdf:RDF xmlns:rdf="" xmlns:geo="">
+<>
+<code> <>55.701</></code>
+<code> <>12.552</></code>
+<code></rdf:RDF></code>
+"""
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext, title="Гео"),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert [section.heading for section in candidate.article.sections] == ["Гео"]
+    assert "RDF-канали" not in candidate.article.clean_text
+    assert "<rdf:RDF" not in candidate.article.clean_text
+    assert "<code>" not in candidate.article.clean_text
+
+
+def test_cleaning_drops_html_code_sections() -> None:
+    raw_wikitext = """
+Вовед со доволно корисна содржина за географски поим.
+
+== Микроформат ==
+Микроформатот Geo овозможува координатите во HTML-страници да се означуваат
+на начин што програмските алатки можат да ги „откриваат“. На пример:
+<span class="geo">
+<span class="latitude">50.167958</span>;
+<span class="longitude">-97.133185</span>
+</span>
+што може да се прикаже како:
+50.167958; -97.133185
+"""
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext, title="Гео"),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert [section.heading for section in candidate.article.sections] == ["Гео"]
+    assert "Микроформат" not in candidate.article.clean_text
+    assert "<span" not in candidate.article.clean_text
+    assert "50.167958" not in candidate.article.clean_text

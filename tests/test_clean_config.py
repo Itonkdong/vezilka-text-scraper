@@ -9,6 +9,7 @@ from vezilka_text_scraper.shared.constants import (
     DEFAULT_LOG_SKIPPED_ARTICLES,
     DEFAULT_MIN_SECTION_WORD_COUNT,
     DEFAULT_MIN_WORD_COUNT,
+    DEFAULT_REMOVE_CODE_SECTIONS,
     DEFAULT_SKIP_DISAMBIGUATION_PAGES,
 )
 from vezilka_text_scraper.shared.exceptions import ServiceError
@@ -33,6 +34,7 @@ remove_files: false
 remove_categories: false
 remove_external_links: false
 remove_navigation_sections: false
+remove_code_sections: false
 normalize_whitespace: false
 """,
         encoding="utf-8",
@@ -49,6 +51,7 @@ normalize_whitespace: false
     assert config.continue_on_error is False
     assert config.log_skipped_articles is False
     assert config.remove_templates is False
+    assert config.remove_code_sections is False
     assert config.normalize_whitespace is False
 
 
@@ -66,6 +69,7 @@ def test_load_partial_clean_config_uses_defaults(tmp_path: Path) -> None:
     assert config.skip_disambiguation_pages is DEFAULT_SKIP_DISAMBIGUATION_PAGES
     assert config.continue_on_error is True
     assert config.log_skipped_articles is DEFAULT_LOG_SKIPPED_ARTICLES
+    assert config.remove_code_sections is DEFAULT_REMOVE_CODE_SECTIONS
 
 
 @pytest.mark.parametrize(

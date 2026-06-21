@@ -15,4 +15,5 @@ remove_files: true
 remove_categories: true
 remove_external_links: true
 remove_navigation_sections: true
+remove_code_sections: true
 normalize_whitespace: true
