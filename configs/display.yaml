@@ -1,2 +1,3 @@
+source: database
 input_path: null
-article_limit: 3
+article_limit: 10

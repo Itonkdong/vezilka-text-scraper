@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import SupportsInt
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import (
@@ -22,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
-from vezilka_text_scraper.models.article import CleanedArticle
+from vezilka_text_scraper.models.article import CleanedArticle, CleanedSection
 from vezilka_text_scraper.services.persist_config import DatabaseConfig
 from vezilka_text_scraper.shared.exceptions import AdapterError
 
@@ -207,6 +208,75 @@ class ArticleDatabaseAdapter:
             wiki_category_link_count=wiki_category_link_count,
             source_category_link_count=source_category_link_count,
         )
+
+    def read_articles(self, article_limit: int) -> list[CleanedArticle]:
+        """Read cleaned article records from the persisted database tables."""
+        try:
+            self.validate_ready()
+            with self._engine.connect() as connection:
+                article_rows = connection.execute(
+                    text(
+                        f"""
+                        SELECT id, page_id, title, url, language, revision_id,
+                               last_modified, scraped_at, cleaned_at, clean_text,
+                               word_count, char_count, section_count
+                        FROM {self._table('articles')}
+                        ORDER BY id
+                        LIMIT :article_limit
+                        """
+                    ),
+                    {"article_limit": article_limit},
+                ).mappings()
+                return [
+                    self._build_cleaned_article_from_row(connection, dict(article_row))
+                    for article_row in article_rows
+                ]
+        except AdapterError:
+            raise
+        except SQLAlchemyError as error:
+            raise AdapterError("Could not read cleaned articles from database") from error
+
+    def read_articles_by_page_ids(
+        self,
+        page_ids: list[int],
+        article_limit: int,
+    ) -> list[CleanedArticle]:
+        """Read persisted articles for the given page ids, preserving page id order."""
+        limited_page_ids = page_ids[:article_limit]
+        if not limited_page_ids:
+            return []
+
+        try:
+            self.validate_ready()
+            with self._engine.connect() as connection:
+                articles_by_page_id: dict[int, CleanedArticle] = {}
+                for page_id in limited_page_ids:
+                    article_row = connection.execute(
+                        text(
+                            f"""
+                            SELECT id, page_id, title, url, language, revision_id,
+                                   last_modified, scraped_at, cleaned_at, clean_text,
+                                   word_count, char_count, section_count
+                            FROM {self._table('articles')}
+                            WHERE page_id = :page_id
+                            """
+                        ),
+                        {"page_id": page_id},
+                    ).mappings().one_or_none()
+                    if article_row is not None:
+                        articles_by_page_id[page_id] = self._build_cleaned_article_from_row(
+                            connection,
+                            dict(article_row),
+                        )
+                return [
+                    articles_by_page_id[page_id]
+                    for page_id in limited_page_ids
+                    if page_id in articles_by_page_id
+                ]
+        except AdapterError:
+            raise
+        except SQLAlchemyError as error:
+            raise AdapterError("Could not read cleaned articles from database") from error
 
     def mask_database_url(self) -> str:
         """Return the database URL with any password hidden."""
@@ -461,6 +531,93 @@ class ArticleDatabaseAdapter:
             {"name": category_name},
         ).scalar_one()
         return int(category_id)
+
+    def _build_cleaned_article_from_row(
+        self,
+        connection: Connection,
+        article_row: dict[str, object],
+    ) -> CleanedArticle:
+        article_id = self._to_int(article_row["id"])
+        sections = [
+            CleanedSection(
+                heading=str(section_row["heading"]),
+                content=str(section_row["content"]),
+                word_count=self._to_int(section_row["word_count"]),
+                char_count=self._to_int(section_row["char_count"]),
+                position=self._to_int(section_row["position"]),
+            )
+            for section_row in connection.execute(
+                text(
+                    f"""
+                    SELECT heading, content, word_count, char_count, position
+                    FROM {self._table('sections')}
+                    WHERE article_id = :article_id
+                    ORDER BY position
+                    """
+                ),
+                {"article_id": article_id},
+            ).mappings()
+        ]
+        categories = self._read_category_names(
+            connection=connection,
+            article_id=article_id,
+            category_table="wiki_categories",
+            relationship_table="article_wiki_categories",
+        )
+        source_categories = self._read_category_names(
+            connection=connection,
+            article_id=article_id,
+            category_table="source_categories",
+            relationship_table="article_source_categories",
+        )
+        return CleanedArticle(
+            page_id=self._to_int(article_row["page_id"]),
+            title=str(article_row["title"]),
+            url=str(article_row["url"]),
+            language=str(article_row["language"]),
+            categories=categories,
+            revision_id=self._to_int(article_row["revision_id"]),
+            last_modified=str(article_row["last_modified"]),
+            scraped_at=str(article_row["scraped_at"]),
+            cleaned_at=str(article_row["cleaned_at"]),
+            source_categories=source_categories,
+            clean_text=str(article_row["clean_text"]),
+            word_count=self._to_int(article_row["word_count"]),
+            char_count=self._to_int(article_row["char_count"]),
+            section_count=self._to_int(article_row["section_count"]),
+            sections=sections,
+        )
+
+    def _to_int(self, value: object) -> int:
+        if isinstance(value, int | str | bytes | bytearray):
+            return int(value)
+        if isinstance(value, SupportsInt):
+            return int(value)
+        raise AdapterError(f"Expected integer database value, got {type(value).__name__}")
+
+    def _read_category_names(
+        self,
+        connection: Connection,
+        article_id: int,
+        category_table: str,
+        relationship_table: str,
+    ) -> list[str]:
+        return [
+            str(row["name"])
+            for row in connection.execute(
+                text(
+                    f"""
+                    SELECT category.name
+                    FROM {self._table(category_table)} AS category
+                    JOIN {self._table(relationship_table)} AS relationship
+                        ON relationship.category_id = category.id
+                    WHERE relationship.article_id = :article_id
+                    ORDER BY category.name
+                    """
+                ),
+                {"article_id": article_id},
+            ).mappings()
+        ]
 
     def _article_payload(self, article: CleanedArticle) -> dict[str, object]:
         return {

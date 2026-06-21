@@ -1,12 +1,17 @@
 import json
 from pathlib import Path
 
+import pytest
 from pytest import CaptureFixture
 
 from vezilka_text_scraper.adapters.article_jsonl import CleanedArticleJsonlReader
+from vezilka_text_scraper.adapters.database import ArticleDatabaseAdapter
 from vezilka_text_scraper.jobs.display import WikipediaDisplayJob
+from vezilka_text_scraper.models.article import CleanedArticle, CleanedSection
 from vezilka_text_scraper.services.article_display import ArticleDisplayService
 from vezilka_text_scraper.services.configuration import ConfigurationService
+from vezilka_text_scraper.services.persist_config import DatabaseConfig
+from vezilka_text_scraper.shared import env_variables
 
 
 def _processed_record(page_id: int, title: str) -> dict[str, object]:
@@ -71,5 +76,67 @@ article_limit: 1
     captured = capsys.readouterr()
 
     assert result.displayed_count == 1
+    assert result.source == "file"
     assert "Прва" in captured.out
     assert "Втора" not in captured.out
+
+
+def test_display_job_prints_articles_from_database(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "corpus.db"
+    monkeypatch.setattr(env_variables, "SQLITE_DATABASE_PATH", database_path)
+    database_adapter = ArticleDatabaseAdapter(DatabaseConfig(type="sqlite"))
+    database_adapter.initialize_schema()
+    database_adapter.persist_articles(
+        [
+            CleanedArticle(
+                page_id=1,
+                title="Прва",
+                url="https://mk.wikipedia.org/wiki/Прва",
+                language="mk",
+                categories=["Категорија:Географија"],
+                revision_id=11,
+                last_modified="2026-01-01T00:00:00Z",
+                scraped_at="2026-06-21T00:00:00+00:00",
+                cleaned_at="2026-06-21T01:00:00+00:00",
+                source_categories=["Географија"],
+                clean_text="Прва\n\nСодржина.",
+                word_count=2,
+                char_count=10,
+                section_count=1,
+                sections=[
+                    CleanedSection(
+                        heading="Прва",
+                        content="Содржина.",
+                        word_count=1,
+                        char_count=9,
+                        position=0,
+                    )
+                ],
+            )
+        ]
+    )
+    config_path = tmp_path / "display.yaml"
+    config_path.write_text(
+        """
+source: database
+article_limit: 1
+""",
+        encoding="utf-8",
+    )
+    job = WikipediaDisplayJob(
+        configuration_service=ConfigurationService(),
+        reader=CleanedArticleJsonlReader(tmp_path / "processed"),
+        display_service=ArticleDisplayService(),
+    )
+
+    result = job.run(config_path=config_path)
+    captured = capsys.readouterr()
+
+    assert result.displayed_count == 1
+    assert result.source == "database"
+    assert "Прва" in captured.out
+    assert "Содржина." in captured.out

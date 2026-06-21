@@ -9,13 +9,17 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from vezilka_text_scraper.adapters.article_jsonl import CleanedArticleJsonlReader
+from vezilka_text_scraper.adapters.database import ArticleDatabaseAdapter
 from vezilka_text_scraper.services.article_display import ArticleDisplayService
 from vezilka_text_scraper.services.configuration import ConfigurationService
-from vezilka_text_scraper.services.display_config import DisplayConfig
+from vezilka_text_scraper.services.display_config import DisplayConfig, DisplaySource
+from vezilka_text_scraper.services.persist_config import DatabaseConfig
 from vezilka_text_scraper.shared.constants import DEFAULT_DISPLAY_CONFIG_PATH
 from vezilka_text_scraper.shared.logger import colorize, get_logger
 
 LOGGER = get_logger(__name__)
+DISPLAY_SOURCE_FILE: DisplaySource = "file"
+DISPLAY_SOURCE_DATABASE: DisplaySource = "database"
 
 
 class DisplayJobResult(BaseModel):
@@ -25,6 +29,7 @@ class DisplayJobResult(BaseModel):
 
     input_path: Path
     config_path: Path
+    source: DisplaySource
     read_count: int
     displayed_count: int
     duration_seconds: float
@@ -45,17 +50,28 @@ class WikipediaDisplayJob:
         self._reader = reader
         self._display_service = display_service
 
-    def run(self, config_path: Path | None = None) -> DisplayJobResult:
+    def run(
+        self,
+        config_path: Path | None = None,
+        source: DisplaySource | None = None,
+    ) -> DisplayJobResult:
         """Run the processed article display job."""
         resolved_config_path = config_path or self.default_config_path
         started_at = perf_counter()
         input_path = Path("-")
+        resolved_source: DisplaySource = source or DISPLAY_SOURCE_FILE
         read_count = 0
 
         try:
             config = self._configuration_service.load(resolved_config_path, DisplayConfig)
-            input_path = self._reader.resolve_input_path(config.input_path)
-            articles = self._reader.read_articles(input_path, config.article_limit)
+            resolved_source = source or config.source
+            if resolved_source == DISPLAY_SOURCE_DATABASE:
+                database_adapter = ArticleDatabaseAdapter(DatabaseConfig())
+                articles = database_adapter.read_articles(config.article_limit)
+            else:
+                resolved_source = DISPLAY_SOURCE_FILE
+                input_path = self._reader.resolve_input_path(config.input_path)
+                articles = self._reader.read_articles(input_path, config.article_limit)
             read_count = len(articles)
             formatted_output = self._display_service.format_articles(articles)
             if formatted_output:
@@ -64,6 +80,7 @@ class WikipediaDisplayJob:
             result = DisplayJobResult(
                 input_path=input_path,
                 config_path=resolved_config_path,
+                source=resolved_source,
                 read_count=read_count,
                 displayed_count=read_count,
                 duration_seconds=perf_counter() - started_at,
@@ -79,6 +96,7 @@ class WikipediaDisplayJob:
             result = DisplayJobResult(
                 input_path=input_path,
                 config_path=resolved_config_path,
+                source=resolved_source,
                 read_count=read_count,
                 displayed_count=read_count,
                 duration_seconds=perf_counter() - started_at,
@@ -101,6 +119,7 @@ class WikipediaDisplayJob:
             "Job": "display",
             "Status": status,
             "Config": result.config_path,
+            "Source": result.source,
             "Input": result.input_path,
             "Read": result.read_count,
             "Displayed": result.displayed_count,
@@ -128,22 +147,36 @@ def build_wikipedia_display_job() -> WikipediaDisplayJob:
     )
 
 
-def main(config_path: Path | None = None) -> None:
+def main(config_path: Path | None = None, source: DisplaySource | None = None) -> None:
     """Run the display job."""
     import sys
 
     from vezilka_text_scraper.shared.logger import configure_logging
 
     resolved_config_path = config_path
-    if resolved_config_path is None and len(sys.argv) > 1:
-        if sys.argv[1] in {"-h", "--help"}:
-            print("Usage: display-wikipedia [config_path]")
+    resolved_source = source
+    cli_args = sys.argv[1:]
+    if cli_args:
+        if any(arg in {"-h", "--help"} for arg in cli_args):
+            print("Usage: display-wikipedia [--from-file|--from-db] [config_path]")
             print(f"Default config: {WikipediaDisplayJob.default_config_path}")
             return
-        resolved_config_path = Path(sys.argv[1])
+        remaining_args: list[str] = []
+        for arg in cli_args:
+            if arg == "--from-db":
+                resolved_source = DISPLAY_SOURCE_DATABASE
+            elif arg == "--from-file":
+                resolved_source = DISPLAY_SOURCE_FILE
+            else:
+                remaining_args.append(arg)
+        if remaining_args:
+            resolved_config_path = Path(remaining_args[0])
 
     configure_logging()
-    build_wikipedia_display_job().run(resolved_config_path)
+    build_wikipedia_display_job().run(
+        config_path=resolved_config_path,
+        source=resolved_source,
+    )
 
 
 if __name__ == "__main__":

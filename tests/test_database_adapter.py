@@ -224,6 +224,25 @@ def test_persist_articles_inserts_article_sections_and_categories(
         )
 
 
+def test_read_articles_reconstructs_cleaned_articles_from_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = ArticleDatabaseAdapter(_database_config(tmp_path, monkeypatch))
+    adapter.initialize_schema()
+    adapter.persist_articles(
+        [_article(page_id=1, title="Прва"), _article(page_id=2, title="Втора")]
+    )
+
+    articles = adapter.read_articles(article_limit=1)
+
+    assert len(articles) == 1
+    assert articles[0].title == "Прва"
+    assert articles[0].sections[0].heading == "Прва"
+    assert articles[0].categories == ["Категорија:Географија", "Категорија:Наука"]
+    assert articles[0].source_categories == ["Географија"]
+
+
 def test_persist_articles_upserts_and_replaces_sections(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -35,6 +35,16 @@ class ScrapeJobResult(BaseModel):
     duration_seconds: float
 
 
+class ScrapeCollectionResult(BaseModel):
+    """Raw articles collected from MediaWiki before optional storage."""
+
+    model_config = ConfigDict(frozen=True)
+
+    raw_articles: list[RawArticle]
+    discovered_count: int
+    failed_count: int
+
+
 class WikipediaScrapeJob:
     """Orchestrate raw Wikipedia article discovery, fetching, and JSONL storage."""
 
@@ -68,42 +78,15 @@ class WikipediaScrapeJob:
         try:
             config = self._configuration_service.load(resolved_config_path, ScrapeConfig)
             output_path = self._storage_adapter.build_output_path(config.output_run_name)
-            scraped_at = datetime.now(UTC).isoformat()
-
-            LOGGER.info(f"Starting raw Wikipedia scrape from {len(config.categories)} categories")
-            discovered_articles = self._discovery_service.discover(config)
-            discovered_count = len(discovered_articles)
-            LOGGER.info(f"Discovered {discovered_count} unique articles")
-
-            raw_articles: list[RawArticle] = []
-
-            for discovered_article in discovered_articles:
-                try:
-                    raw_article = self._mediawiki_adapter.fetch_raw_article(
-                        page_id=discovered_article.page_id,
-                        language=env_variables.LANGUAGE,
-                        source_categories=discovered_article.source_categories,
-                        scraped_at=scraped_at,
-                        include_redirects=config.include_redirects,
-                    )
-                except AdapterError as error:
-                    failed_count += 1
-                    if config.continue_on_error:
-                        LOGGER.warning(
-                            f"Skipping article '{discovered_article.title}' "
-                            f"({discovered_article.page_id}): {error}"
-                        )
-                        continue
-                    raise JobError(
-                        f"Could not fetch article '{discovered_article.title}' "
-                        f"({discovered_article.page_id})"
-                    ) from error
-
-                if raw_article is not None:
-                    raw_articles.append(raw_article)
+            collected = self.collect_raw_articles(config)
+            discovered_count = collected.discovered_count
+            failed_count = collected.failed_count
 
             try:
-                saved_count = self._storage_adapter.write_articles(raw_articles, output_path)
+                saved_count = self._storage_adapter.write_articles(
+                    collected.raw_articles,
+                    output_path,
+                )
             except AdapterError as error:
                 raise JobError("Could not save raw Wikipedia scrape output") from error
 
@@ -143,6 +126,48 @@ class WikipediaScrapeJob:
                 )
             )
             raise
+
+    def collect_raw_articles(self, config: ScrapeConfig) -> ScrapeCollectionResult:
+        """Discover and fetch raw articles without writing them."""
+        scraped_at = datetime.now(UTC).isoformat()
+
+        LOGGER.info(f"Starting raw Wikipedia scrape from {len(config.categories)} categories")
+        discovered_articles = self._discovery_service.discover(config)
+        discovered_count = len(discovered_articles)
+        failed_count = 0
+        LOGGER.info(f"Discovered {discovered_count} unique articles")
+
+        raw_articles: list[RawArticle] = []
+        for discovered_article in discovered_articles:
+            try:
+                raw_article = self._mediawiki_adapter.fetch_raw_article(
+                    page_id=discovered_article.page_id,
+                    language=env_variables.LANGUAGE,
+                    source_categories=discovered_article.source_categories,
+                    scraped_at=scraped_at,
+                    include_redirects=config.include_redirects,
+                )
+            except AdapterError as error:
+                failed_count += 1
+                if config.continue_on_error:
+                    LOGGER.warning(
+                        f"Skipping article '{discovered_article.title}' "
+                        f"({discovered_article.page_id}): {error}"
+                    )
+                    continue
+                raise JobError(
+                    f"Could not fetch article '{discovered_article.title}' "
+                    f"({discovered_article.page_id})"
+                ) from error
+
+            if raw_article is not None:
+                raw_articles.append(raw_article)
+
+        return ScrapeCollectionResult(
+            raw_articles=raw_articles,
+            discovered_count=discovered_count,
+            failed_count=failed_count,
+        )
 
     def _format_final_summary(
         self,

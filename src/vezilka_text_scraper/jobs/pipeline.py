@@ -1,0 +1,311 @@
+"""Full Wikipedia corpus pipeline job."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from time import perf_counter
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from vezilka_text_scraper.adapters.article_jsonl import CleanedArticleJsonlWriter
+from vezilka_text_scraper.adapters.database import ArticleDatabaseAdapter
+from vezilka_text_scraper.adapters.raw_storage import RawArticleJsonlStorageAdapter
+from vezilka_text_scraper.jobs.clean import WikipediaCleanJob, build_wikipedia_clean_job
+from vezilka_text_scraper.jobs.scrape import WikipediaScrapeJob, build_wikipedia_scrape_job
+from vezilka_text_scraper.models.article import RawArticleInput
+from vezilka_text_scraper.services.article_display import ArticleDisplayService
+from vezilka_text_scraper.services.clean_config import CleanConfig
+from vezilka_text_scraper.services.configuration import ConfigurationService
+from vezilka_text_scraper.services.display_config import DisplayConfig
+from vezilka_text_scraper.services.persist_config import PersistConfig
+from vezilka_text_scraper.services.pipeline_config import PipelineConfig, PipelineDisplaySource
+from vezilka_text_scraper.services.scrape_config import ScrapeConfig
+from vezilka_text_scraper.shared.constants import DEFAULT_PIPELINE_CONFIG_PATH
+from vezilka_text_scraper.shared.logger import colorize, get_logger
+
+LOGGER = get_logger(__name__)
+
+
+class PipelineJobResult(BaseModel):
+    """Result summary for the full corpus pipeline job."""
+
+    model_config = ConfigDict(frozen=True)
+
+    config_path: Path
+    scrape_config_path: Path
+    clean_config_path: Path
+    persist_config_path: Path
+    display_config_path: Path
+    raw_output_path: Path
+    clean_output_path: Path
+    save_scraped_articles: bool
+    save_cleaned_articles: bool
+    persist_to_database: bool
+    run_display: bool
+    display_source: PipelineDisplaySource
+    raw_discovered_count: int = Field(default=0, ge=0)
+    raw_fetched_count: int = Field(default=0, ge=0)
+    raw_saved_count: int = Field(default=0, ge=0)
+    raw_failed_count: int = Field(default=0, ge=0)
+    clean_read_count: int = Field(default=0, ge=0)
+    cleaned_count: int = Field(default=0, ge=0)
+    clean_saved_count: int = Field(default=0, ge=0)
+    clean_skipped_count: int = Field(default=0, ge=0)
+    clean_failed_count: int = Field(default=0, ge=0)
+    persist_inserted_count: int = Field(default=0, ge=0)
+    persist_updated_count: int = Field(default=0, ge=0)
+    displayed_count: int = Field(default=0, ge=0)
+    duration_seconds: float
+
+
+class WikipediaPipelineJob:
+    """Run scrape, clean, optional persist, and optional display as one workflow."""
+
+    default_config_path = DEFAULT_PIPELINE_CONFIG_PATH
+
+    def __init__(
+        self,
+        configuration_service: ConfigurationService,
+        scrape_job: WikipediaScrapeJob,
+        clean_job: WikipediaCleanJob,
+        raw_storage: RawArticleJsonlStorageAdapter,
+        cleaned_writer: CleanedArticleJsonlWriter,
+        display_service: ArticleDisplayService,
+    ) -> None:
+        self._configuration_service = configuration_service
+        self._scrape_job = scrape_job
+        self._clean_job = clean_job
+        self._raw_storage = raw_storage
+        self._cleaned_writer = cleaned_writer
+        self._display_service = display_service
+
+    def run(self, config_path: Path | None = None) -> PipelineJobResult:
+        """Run the full Wikipedia corpus pipeline."""
+        resolved_config_path = config_path or self.default_config_path
+        started_at = perf_counter()
+        result = self._empty_result(resolved_config_path)
+
+        try:
+            config = self._configuration_service.load(resolved_config_path, PipelineConfig)
+            scrape_config = self._configuration_service.load(
+                config.scrape_config_path,
+                ScrapeConfig,
+            )
+            clean_config = self._configuration_service.load(
+                config.clean_config_path,
+                CleanConfig,
+            )
+
+            LOGGER.info("Starting full Wikipedia corpus pipeline")
+            raw_collection = self._scrape_job.collect_raw_articles(scrape_config)
+            raw_output_path = Path("-")
+            raw_saved_count = 0
+            if config.save_scraped_articles:
+                raw_output_path = self._raw_storage.build_output_path(
+                    scrape_config.output_run_name
+                )
+                raw_saved_count = self._raw_storage.write_articles(
+                    raw_collection.raw_articles,
+                    raw_output_path,
+                )
+
+            raw_inputs = [
+                RawArticleInput(**raw_article.model_dump())
+                for raw_article in raw_collection.raw_articles
+            ]
+            clean_collection = self._clean_job.clean_raw_articles(raw_inputs, clean_config)
+            clean_output_path = Path("-")
+            clean_saved_count = 0
+            if config.save_cleaned_articles:
+                clean_output_path = self._cleaned_writer.build_output_path(
+                    clean_config.output_run_name
+                )
+                clean_saved_count = self._cleaned_writer.write_articles(
+                    clean_collection.cleaned_articles,
+                    clean_output_path,
+                )
+
+            persist_inserted_count = 0
+            persist_updated_count = 0
+            if config.persist_to_database:
+                persist_config = self._configuration_service.load(
+                    config.persist_config_path,
+                    PersistConfig,
+                )
+                database_adapter = ArticleDatabaseAdapter(persist_config.database)
+                database_adapter.initialize_schema()
+                persisted = database_adapter.persist_articles(clean_collection.cleaned_articles)
+                persist_inserted_count = persisted.inserted_count
+                persist_updated_count = persisted.updated_count
+
+            displayed_count = 0
+            if config.run_display:
+                display_config = self._configuration_service.load(
+                    config.display_config_path,
+                    DisplayConfig,
+                )
+                display_articles = clean_collection.cleaned_articles[: display_config.article_limit]
+                if config.display_source == "database":
+                    persist_config = self._configuration_service.load(
+                        config.persist_config_path,
+                        PersistConfig,
+                    )
+                    database_adapter = ArticleDatabaseAdapter(persist_config.database)
+                    display_articles = database_adapter.read_articles_by_page_ids(
+                        [article.page_id for article in clean_collection.cleaned_articles],
+                        display_config.article_limit,
+                    )
+                formatted_output = self._display_service.format_articles(display_articles)
+                if formatted_output:
+                    print(formatted_output)
+                displayed_count = len(display_articles)
+
+            result = PipelineJobResult(
+                config_path=resolved_config_path,
+                scrape_config_path=config.scrape_config_path,
+                clean_config_path=config.clean_config_path,
+                persist_config_path=config.persist_config_path,
+                display_config_path=config.display_config_path,
+                raw_output_path=raw_output_path,
+                clean_output_path=clean_output_path,
+                save_scraped_articles=config.save_scraped_articles,
+                save_cleaned_articles=config.save_cleaned_articles,
+                persist_to_database=config.persist_to_database,
+                run_display=config.run_display,
+                display_source=config.display_source,
+                raw_discovered_count=raw_collection.discovered_count,
+                raw_fetched_count=len(raw_collection.raw_articles),
+                raw_saved_count=raw_saved_count,
+                raw_failed_count=raw_collection.failed_count,
+                clean_read_count=clean_collection.read_count,
+                cleaned_count=clean_collection.cleaned_count,
+                clean_saved_count=clean_saved_count,
+                clean_skipped_count=clean_collection.skipped_count,
+                clean_failed_count=clean_collection.failed_count,
+                persist_inserted_count=persist_inserted_count,
+                persist_updated_count=persist_updated_count,
+                displayed_count=displayed_count,
+                duration_seconds=perf_counter() - started_at,
+            )
+            LOGGER.info(
+                colorize(
+                    self._format_final_summary(status="SUCCESS", result=result),
+                    "green",
+                )
+            )
+            return result
+        except Exception as error:
+            result = result.model_copy(update={"duration_seconds": perf_counter() - started_at})
+            LOGGER.error(
+                colorize(
+                    self._format_final_summary(
+                        status="FAILED",
+                        result=result,
+                        error=error,
+                    ),
+                    "red",
+                )
+            )
+            raise
+
+    def _empty_result(self, config_path: Path) -> PipelineJobResult:
+        return PipelineJobResult(
+            config_path=config_path,
+            scrape_config_path=Path("-"),
+            clean_config_path=Path("-"),
+            persist_config_path=Path("-"),
+            display_config_path=Path("-"),
+            raw_output_path=Path("-"),
+            clean_output_path=Path("-"),
+            save_scraped_articles=False,
+            save_cleaned_articles=False,
+            persist_to_database=False,
+            run_display=False,
+            display_source="file",
+            duration_seconds=0,
+        )
+
+    def _format_final_summary(
+        self,
+        status: str,
+        result: PipelineJobResult,
+        error: Exception | None = None,
+    ) -> str:
+        details: dict[str, Any] = {
+            "Job": "pipeline",
+            "Status": status,
+            "Config": result.config_path,
+            "Scrape cfg": result.scrape_config_path,
+            "Clean cfg": result.clean_config_path,
+            "Persist cfg": result.persist_config_path,
+            "Display cfg": result.display_config_path,
+            "Save raw": result.save_scraped_articles,
+            "Save clean": result.save_cleaned_articles,
+            "Persist": result.persist_to_database,
+            "Display": result.run_display,
+            "Display src": result.display_source,
+            "Raw output": result.raw_output_path,
+            "Clean output": result.clean_output_path,
+            "Raw found": result.raw_discovered_count,
+            "Raw fetched": result.raw_fetched_count,
+            "Raw saved": result.raw_saved_count,
+            "Raw failed": result.raw_failed_count,
+            "Cleaned": result.cleaned_count,
+            "Clean saved": result.clean_saved_count,
+            "Clean skip": result.clean_skipped_count,
+            "Clean failed": result.clean_failed_count,
+            "DB inserted": result.persist_inserted_count,
+            "DB updated": result.persist_updated_count,
+            "Displayed": result.displayed_count,
+            "Duration": f"{result.duration_seconds:.2f}s",
+        }
+        if error is not None:
+            details["Reason"] = str(error)
+
+        width = 86
+        title = f" {status} JOB SUMMARY "
+        border = f"+{title.center(width - 2, '=')}+"
+        lines = ["", border]
+        for key, value in details.items():
+            lines.append(f"| {key:<14}: {str(value):<{width - 19}} |")
+        lines.append(f"+{'=' * (width - 2)}+")
+        return "\n".join(lines)
+
+
+def build_wikipedia_pipeline_job() -> WikipediaPipelineJob:
+    """Build the full pipeline job with production dependencies."""
+    return WikipediaPipelineJob(
+        configuration_service=ConfigurationService(),
+        scrape_job=build_wikipedia_scrape_job(),
+        clean_job=build_wikipedia_clean_job(),
+        raw_storage=RawArticleJsonlStorageAdapter(),
+        cleaned_writer=CleanedArticleJsonlWriter(),
+        display_service=ArticleDisplayService(),
+    )
+
+
+def main(config_path: Path | None = None) -> None:
+    """Run the full pipeline job."""
+    import sys
+
+    from vezilka_text_scraper.shared.logger import configure_logging
+
+    resolved_config_path = config_path
+    if resolved_config_path is None and len(sys.argv) > 1:
+        if sys.argv[1] in {"-h", "--help"}:
+            print("Usage: pipeline-wikipedia [config_path]")
+            print(f"Default config: {WikipediaPipelineJob.default_config_path}")
+            return
+        resolved_config_path = Path(sys.argv[1])
+
+    configure_logging()
+    result = build_wikipedia_pipeline_job().run(resolved_config_path)
+    print(
+        f"Pipeline cleaned {result.cleaned_count} articles "
+        f"({result.raw_fetched_count} raw fetched)"
+    )
+
+
+if __name__ == "__main__":
+    main()

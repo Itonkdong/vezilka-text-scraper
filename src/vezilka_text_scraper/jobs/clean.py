@@ -13,7 +13,7 @@ from vezilka_text_scraper.adapters.article_jsonl import (
     CleanedArticleJsonlWriter,
     RawArticleJsonlReader,
 )
-from vezilka_text_scraper.models.article import CleanedArticle
+from vezilka_text_scraper.models.article import CleanedArticle, RawArticleInput
 from vezilka_text_scraper.services.article_cleaning import ArticleCleaningService
 from vezilka_text_scraper.services.clean_config import CleanConfig
 from vezilka_text_scraper.services.configuration import ConfigurationService
@@ -37,6 +37,18 @@ class CleanJobResult(BaseModel):
     skipped_count: int
     failed_count: int
     duration_seconds: float
+
+
+class CleanCollectionResult(BaseModel):
+    """Cleaned articles before optional processed JSONL storage."""
+
+    model_config = ConfigDict(frozen=True)
+
+    cleaned_articles: list[CleanedArticle]
+    read_count: int
+    cleaned_count: int
+    skipped_count: int
+    failed_count: int
 
 
 class WikipediaCleanJob:
@@ -76,44 +88,18 @@ class WikipediaCleanJob:
             input_path = self._raw_reader.resolve_input_path(config.input_path)
             output_path = self._cleaned_writer.build_output_path(config.output_run_name)
             raw_articles = self._raw_reader.read_articles(input_path)
-            read_count = len(raw_articles)
-            cleaned_at = datetime.now(UTC).isoformat()
-
             LOGGER.info(f"Starting Wikipedia clean job from {input_path}")
-            LOGGER.info(f"Loaded {read_count} raw articles")
-
-            cleaned_articles: list[CleanedArticle] = []
-            for raw_article in raw_articles:
-                try:
-                    candidate = self._cleaning_service.clean_article(
-                        raw_article,
-                        config,
-                        cleaned_at,
-                    )
-                    skip_reason = self._cleaning_service.get_skip_reason(candidate, config)
-                    if skip_reason is not None:
-                        skipped_count += 1
-                        if config.log_skipped_articles:
-                            LOGGER.info(
-                                f"Skipping cleaned article '{raw_article.title}' "
-                                f"({raw_article.page_id}): {skip_reason}"
-                            )
-                        continue
-                    cleaned_articles.append(candidate.article)
-                except ServiceError as error:
-                    failed_count += 1
-                    LOGGER.warning(
-                        f"Failed cleaning raw article '{raw_article.title}' "
-                        f"({raw_article.page_id}): {error}"
-                    )
-                    if config.continue_on_error:
-                        continue
-                    raise JobError(
-                        f"Could not clean article '{raw_article.title}' ({raw_article.page_id})"
-                    ) from error
+            collected = self.clean_raw_articles(raw_articles, config)
+            read_count = collected.read_count
+            cleaned_count = collected.cleaned_count
+            skipped_count = collected.skipped_count
+            failed_count = collected.failed_count
 
             try:
-                cleaned_count = self._cleaned_writer.write_articles(cleaned_articles, output_path)
+                cleaned_count = self._cleaned_writer.write_articles(
+                    collected.cleaned_articles,
+                    output_path,
+                )
             except AdapterError as error:
                 raise JobError("Could not save cleaned Wikipedia output") from error
 
@@ -157,6 +143,59 @@ class WikipediaCleanJob:
                 )
             )
             raise
+
+    def clean_raw_articles(
+        self,
+        raw_articles: list[RawArticleInput],
+        config: CleanConfig,
+    ) -> CleanCollectionResult:
+        """Clean raw article records without writing processed JSONL."""
+        read_count = len(raw_articles)
+        cleaned_count = 0
+        skipped_count = 0
+        failed_count = 0
+        cleaned_at = datetime.now(UTC).isoformat()
+
+        LOGGER.info(f"Loaded {read_count} raw articles")
+
+        cleaned_articles: list[CleanedArticle] = []
+        for raw_article in raw_articles:
+            try:
+                candidate = self._cleaning_service.clean_article(
+                    raw_article,
+                    config,
+                    cleaned_at,
+                )
+                skip_reason = self._cleaning_service.get_skip_reason(candidate, config)
+                if skip_reason is not None:
+                    skipped_count += 1
+                    if config.log_skipped_articles:
+                        LOGGER.info(
+                            f"Skipping cleaned article '{raw_article.title}' "
+                            f"({raw_article.page_id}): {skip_reason}"
+                        )
+                    continue
+                cleaned_articles.append(candidate.article)
+            except ServiceError as error:
+                failed_count += 1
+                LOGGER.warning(
+                    f"Failed cleaning raw article '{raw_article.title}' "
+                    f"({raw_article.page_id}): {error}"
+                )
+                if config.continue_on_error:
+                    continue
+                raise JobError(
+                    f"Could not clean article '{raw_article.title}' ({raw_article.page_id})"
+                ) from error
+
+        cleaned_count = len(cleaned_articles)
+        return CleanCollectionResult(
+            cleaned_articles=cleaned_articles,
+            read_count=read_count,
+            cleaned_count=cleaned_count,
+            skipped_count=skipped_count,
+            failed_count=failed_count,
+        )
 
     def _format_final_summary(
         self,

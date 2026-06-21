@@ -27,6 +27,7 @@ clean-wikipedia = "vezilka_text_scraper.jobs.clean:main"
 display-wikipedia = "vezilka_text_scraper.jobs.display:main"
 persist-wikipedia = "vezilka_text_scraper.jobs.persist:main"
 init-database = "vezilka_text_scraper.jobs.init_database:main"
+pipeline-wikipedia = "vezilka_text_scraper.jobs.pipeline:main"
 
 [project.optional-dependencies]
 dev = [
