@@ -1,6 +1,9 @@
 import json
+import logging
 from pathlib import Path
 from typing import cast
+
+import pytest
 
 from vezilka_text_scraper.adapters.mediawiki import CategoryMember, MediaWikiAdapter, RawArticle
 from vezilka_text_scraper.adapters.raw_storage import RawArticleJsonlStorageAdapter
@@ -43,7 +46,10 @@ class FakeMediaWikiAdapter:
         )
 
 
-def test_scrape_job_writes_raw_articles_in_batches(tmp_path: Path) -> None:
+def test_scrape_job_writes_raw_articles_in_batches(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     raw_dir = tmp_path / "raw"
     config_path = tmp_path / "scrape.yaml"
     config_path.write_text(
@@ -66,7 +72,8 @@ output_run_name: scrape_test
         storage_adapter=RawArticleJsonlStorageAdapter(raw_dir),
     )
 
-    result = job.run(config_path)
+    with caplog.at_level(logging.INFO, logger="vezilka_text_scraper.jobs.scrape"):
+        result = job.run(config_path)
 
     records = [
         json.loads(line)
@@ -77,3 +84,5 @@ output_run_name: scrape_test
     assert result.batch_size == 2
     assert result.batch_count == 2
     assert [record["page_id"] for record in records] == [1, 2, 3]
+    assert "Discovering unique Wikipedia articles from configured categories" in caplog.text
+    assert "Starting raw article fetch from MediaWiki" in caplog.text

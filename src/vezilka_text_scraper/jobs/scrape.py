@@ -182,8 +182,16 @@ class WikipediaScrapeJob:
         raw_articles_batch: list[RawArticle] = []
         discovered_count = 0
         failed_count = 0
+        LOGGER.info(
+            "Discovering unique Wikipedia articles from configured categories "
+            f"(recursive={config.recursive}, max_depth={config.max_depth})"
+        )
         discovered_articles = self._discovery_service.discover(config)
         LOGGER.info(f"Discovered {len(discovered_articles)} unique articles")
+        LOGGER.info(
+            "Starting raw article fetch from MediaWiki "
+            f"({len(discovered_articles)} articles, batch_size={batch_size})"
+        )
         for discovered_article in discovered_articles:
             discovered_count += 1
             try:

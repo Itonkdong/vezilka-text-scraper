@@ -47,14 +47,14 @@ def test_discovery_respects_article_caps_and_deduplicates() -> None:
                 CategoryMember(page_id=101, title="Article B", namespace=0),
                 CategoryMember(page_id=102, title="Article C", namespace=0),
             ],
-            "Историја": [
+            "Наука": [
                 CategoryMember(page_id=100, title="Article A", namespace=0),
                 CategoryMember(page_id=103, title="Article D", namespace=0),
             ],
         }
     )
     config = ScrapeConfig(
-        categories=["Географија", "Историја"],
+        categories=["Географија", "Наука"],
         recursive=False,
         total_article_limit=3,
         per_category_article_limit=2,
@@ -64,7 +64,7 @@ def test_discovery_respects_article_caps_and_deduplicates() -> None:
     articles = ArticleDiscoveryService(adapter).discover(config)
 
     assert [article.page_id for article in articles] == [100, 101, 103]
-    assert articles[0].source_categories == ["Географија", "Историја"]
+    assert articles[0].source_categories == ["Географија", "Наука"]
 
 
 def test_per_category_limit_overrides_global_limit() -> None:
@@ -74,14 +74,14 @@ def test_per_category_limit_overrides_global_limit() -> None:
                 CategoryMember(page_id=100, title="Article A", namespace=0),
                 CategoryMember(page_id=101, title="Article B", namespace=0),
             ],
-            "Историја": [
+            "Наука": [
                 CategoryMember(page_id=102, title="Article C", namespace=0),
                 CategoryMember(page_id=103, title="Article D", namespace=0),
             ],
         }
     )
     config = ScrapeConfig(
-        categories=["Географија", "Историја"],
+        categories=["Географија", "Наука"],
         recursive=False,
         total_article_limit=1,
         per_category_article_limit=2,

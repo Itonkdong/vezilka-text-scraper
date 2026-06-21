@@ -48,11 +48,11 @@ output_run_name: sample_run
 
 def test_load_partial_scrape_config_uses_defaults(tmp_path: Path) -> None:
     config_path = tmp_path / "scrape.yaml"
-    config_path.write_text("categories:\n  - Историја\n", encoding="utf-8")
+    config_path.write_text("categories:\n  - Наука\n", encoding="utf-8")
 
     config = ConfigurationService().load(config_path, ScrapeConfig)
 
-    assert config.categories == ["Историја"]
+    assert config.categories == ["Наука"]
     assert config.recursive is DEFAULT_RECURSIVE_CATEGORY_CRAWL
     assert config.max_depth == DEFAULT_CATEGORY_MAX_DEPTH
     assert config.continue_on_error is DEFAULT_CONTINUE_ON_ERROR
