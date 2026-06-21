@@ -18,6 +18,14 @@ from vezilka_text_scraper.shared.exceptions import ServiceError
 
 SECTION_PATTERN = re.compile(r"^(={2,6})\s*(.*?)\s*\1\s*$", re.MULTILINE)
 CITATION_MARKER_PATTERN = re.compile(r"\[\d+]|\[citation needed]", re.IGNORECASE)
+WIKI_LIST_ITEM_PATTERN = re.compile(r"^[*#]+\s*(?P<item>.+)$", re.MULTILINE)
+ETYMOLOGY_PARENTHESES_PATTERN = re.compile(
+    r"\s*\(од\s+[^)]*(?:"
+    r"старогрчки|грчки|латински|англиски|француски|германски|италијански|"
+    r"старословенски|црковнословенски|[A-Za-z\u0370-\u03FF]"
+    r")[^)]*\)",
+    re.IGNORECASE,
+)
 WHITESPACE_PATTERN = re.compile(r"[ \t]+")
 BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
 
@@ -144,7 +152,7 @@ class ArticleCleaningService:
         return sections
 
     def _clean_wikitext(self, raw_wikitext: str, config: CleanConfig) -> str:
-        working_text = raw_wikitext
+        working_text = self._normalize_list_markup(raw_wikitext)
         if config.remove_tables:
             working_text = self._remove_tables(working_text)
 
@@ -163,9 +171,16 @@ class ArticleCleaningService:
         self._replace_wiki_links(wikicode)
         cleaned_text = wikicode.strip_code(normalize=True, collapse=True)
         cleaned_text = CITATION_MARKER_PATTERN.sub("", cleaned_text)
+        cleaned_text = self._remove_intro_etymology_explanations(cleaned_text)
         if config.normalize_whitespace:
             cleaned_text = self._normalize_whitespace(cleaned_text)
         return cleaned_text.strip()
+
+    def _normalize_list_markup(self, text: str) -> str:
+        return WIKI_LIST_ITEM_PATTERN.sub("- \\g<item>", text)
+
+    def _remove_intro_etymology_explanations(self, text: str) -> str:
+        return ETYMOLOGY_PARENTHESES_PATTERN.sub("", text)
 
     def _remove_tables(self, text: str) -> str:
         lines = text.splitlines()

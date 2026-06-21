@@ -95,3 +95,44 @@ def test_cleaning_filter_skips_short_and_disambiguation_articles() -> None:
         )
         is True
     )
+
+
+def test_cleaning_removes_intro_etymology_explanations() -> None:
+    raw_wikitext = (
+        "'''Географија''' (од [[старогрчки]]: γεω „земја“ и γραφία „опишува“) "
+        "или [[земјопис]] — описна наука за планетата Земја."
+    )
+    config = CleanConfig(min_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert "старогрчки" not in candidate.article.clean_text
+    assert "γεω" not in candidate.article.clean_text
+    assert "γραφία" not in candidate.article.clean_text
+    assert "Географија или земјопис" in candidate.article.clean_text
+
+
+def test_cleaning_keeps_list_items_with_dash_markers() -> None:
+    raw_wikitext = """
+Во географијата постојат повеќе полиња:
+* физичка географија
+* антропогеографија
+# картографија
+# геодезија
+"""
+    config = CleanConfig(min_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert "- физичка географија" in candidate.article.clean_text
+    assert "- антропогеографија" in candidate.article.clean_text
+    assert "- картографија" in candidate.article.clean_text
+    assert "- геодезија" in candidate.article.clean_text
