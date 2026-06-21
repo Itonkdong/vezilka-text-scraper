@@ -1,4 +1,4 @@
-name: vezilka-text-scraper
+name: vezilka
 channels:
   - conda-forge
 dependencies:
@@ -6,3 +6,4 @@ dependencies:
   - pip
   - pip:
       - -r requirements.txt
+      - -e .

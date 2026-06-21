@@ -1,0 +1,4 @@
+source: postgresql
+input_path: null
+article_limit: 15
+random_sample: true

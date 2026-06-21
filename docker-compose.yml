@@ -1,0 +1,42 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vezilka-text-scraper:local
+    container_name: vezilka-app
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      VEZILKA_JOB: ${VEZILKA_JOB:-pipeline-wikipedia}
+      VEZILKA_JOB_ARGS: ${VEZILKA_JOB_ARGS:-}
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "exec $${VEZILKA_JOB:-pipeline-wikipedia} $${VEZILKA_JOB_ARGS:-}"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: vezilka-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vezilka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vezilka}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-vezilka}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - vezilka_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vezilka} -d ${POSTGRES_DATABASE:-vezilka}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  vezilka_postgres_data:

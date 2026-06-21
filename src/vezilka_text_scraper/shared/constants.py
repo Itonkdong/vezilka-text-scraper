@@ -10,6 +10,7 @@ DEFAULT_APP_NAME = "vezilka-text-scraper"
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_LOG_COLOR = True
 DEFAULT_LOG_FORMAT = "human"
+DEFAULT_LOG_DEFAULT_COLOR = "cyan"
 LOG_FORMAT_HUMAN = "human"
 LOG_FORMAT_JSON = "json"
 
@@ -21,8 +22,44 @@ DEFAULT_MEDIAWIKI_MAX_RETRIES = 3
 DEFAULT_LANGUAGE = "mk"
 DEFAULT_RECURSIVE_CATEGORY_CRAWL = True
 DEFAULT_CATEGORY_MAX_DEPTH = 2
+DEFAULT_TOTAL_ARTICLE_LIMIT = 100
+DEFAULT_PER_CATEGORY_ARTICLE_LIMIT = None
+DEFAULT_INCLUDE_REDIRECTS = False
+DEFAULT_WIKIPEDIA_NAMESPACE = 0
+DEFAULT_REQUEST_DELAY_SECONDS = 0.2
+DEFAULT_CONTINUE_ON_ERROR = True
+DEFAULT_SCRAPE_BATCH_SIZE = 100
+DEFAULT_SCRAPE_CONFIG_PATH = Path("configs/scrape.yaml")
+DEFAULT_CLEAN_CONFIG_PATH = Path("configs/clean.yaml")
+DEFAULT_CLEAN_INPUT_PATH = None
+DEFAULT_CLEAN_BATCH_SIZE = 100
+DEFAULT_MIN_WORD_COUNT = 100
+DEFAULT_MIN_SECTION_WORD_COUNT = 10
+DEFAULT_SKIP_DISAMBIGUATION_PAGES = True
+DEFAULT_LOG_SKIPPED_ARTICLES = True
+DEFAULT_REMOVE_CODE_SECTIONS = True
+DEFAULT_CLEAN_OUTPUT_RUN_NAME = None
+DEFAULT_DISPLAY_CONFIG_PATH = Path("configs/display.yaml")
+DEFAULT_DISPLAY_INPUT_PATH = None
+DEFAULT_DISPLAY_ARTICLE_LIMIT = 3
+DEFAULT_DISPLAY_SOURCE = "file"
+DEFAULT_DISPLAY_RANDOM_SAMPLE = False
+DEFAULT_PERSIST_CONFIG_PATH = Path("configs/persist.yaml")
+DEFAULT_PERSIST_INPUT_PATH = None
+DEFAULT_PERSIST_ARTICLE_LIMIT = None
+DEFAULT_PERSIST_BATCH_SIZE = 100
+DEFAULT_INIT_DATABASE_CONFIG_PATH = Path("configs/init_database.yaml")
+DEFAULT_PIPELINE_CONFIG_PATH = Path("configs/pipeline.yaml")
+DEFAULT_PIPELINE_BATCH_SIZE = 100
+DEFAULT_DATABASE_TYPE = "sqlite"
 
-DEFAULT_DATABASE_URL = "sqlite:///data/vezilka_corpus.db"
+DEFAULT_SQLITE_DATABASE_PATH = Path("data/vezilka_corpus.db")
+DEFAULT_POSTGRES_HOST = "localhost"
+DEFAULT_POSTGRES_PORT = 5432
+DEFAULT_POSTGRES_USER = "vezilka"
+DEFAULT_POSTGRES_PASSWORD = "vezilka"
+DEFAULT_POSTGRES_DATABASE = "vezilka"
+DEFAULT_POSTGRES_SCHEMA = "public"
 
 DEFAULT_RAW_DATA_DIR = Path("data/raw")
 DEFAULT_PROCESSED_DATA_DIR = Path("data/processed")
@@ -30,13 +67,139 @@ DEFAULT_EXPORT_DATA_DIR = Path("data/exports")
 
 WIKIPEDIA_CANONICAL_BASE_URL = "https://mk.wikipedia.org/wiki"
 
+SUITABLE_WIKIPEDIA_CATEGORIES = frozenset(
+    {
+        "Географија",
+        "Биологија",
+        "Математика",
+        "Наука",
+        "Технологија",
+        "Архитектура",
+        "Земјоделство",
+        "Животни",
+        "Растенија",
+        "Астрономија",
+    }
+)
+
 STOP_SECTION_TITLES = frozenset(
     {
         "Белешки",
         "Видете исто така",
         "Извори",
+        "Дополнителна литература",
+        "Литература",
         "Наводи",
         "Надворешни врски",
+        "Поврзано",
         "Референци",
     }
 )
+
+DISAMBIGUATION_TITLE_MARKERS = frozenset(
+    {
+        "појаснување",
+        "појаснителна",
+        "појаснителница",
+    }
+)
+
+SENSITIVITY_STATUS_SAFE = "safe"
+SENSITIVITY_STATUS_CAUTION = "caution"
+SENSITIVITY_STATUS_RESTRICTED = "restricted"
+
+CAUTION_SENSITIVE_KEYWORDS = frozenset({
+    # Politics
+    "политика",
+    "политичар",
+    "политичка партија",
+    "избори",
+    "влада",
+    "парламент",
+    "министерство",
+    "претседател",
+
+    # Nationalism & identity
+    "национализам",
+    "етнички конфликт",
+    "идентитет",
+    "малцинство",
+
+    # Macedonia-related neighboring countries and groups
+    "србија",
+    "бугарија",
+    "грција",
+    "албанија",
+    "срби",
+    "бугари",
+    "грци",
+    "албанци",
+    "косовари",
+    "косово",
+    "голема албанија",
+
+    # Religion
+    "религија",
+    "црква",
+    "ислам",
+    "христијанство",
+    "православие",
+    "католицизам",
+    "теологија",
+})
+
+RESTRICTED_SENSITIVE_KEYWORDS = frozenset({
+    # Macedonia-related disputes
+    "македонско прашање",
+    "спор за името",
+    "бугаризација",
+    "хеленизација",
+    "србизација",
+    "асимилација",
+
+    # Nationalism & identity conflict
+    "етнички конфликт",
+
+    # Extremism
+    "фашизам",
+    "нацизам",
+    "неонацизам",
+    "екстремизам",
+    "радикализам",
+    "тероризам",
+
+    # Military
+    "војна",
+    "битка",
+    "окупација",
+    "инвазија",
+    "геноцид",
+    "војска",
+    "воена операција",
+
+    # Crime
+    "убиство",
+    "силување",
+    "терористички напад",
+    "криминал",
+    "трговија со дрога",
+    "трговија со луѓе",
+    "тортура",
+
+    # Explicit content
+    "порнографија",
+    "еротика",
+    "сексуален однос",
+    "проституција",
+
+    # Self-harm
+    "самоубиство",
+    "самоповредување",
+
+    # Disasters
+    "масакр",
+    "катастрофа",
+    "авионска несреќа",
+})
+
+SENSITIVE_KEYWORDS = CAUTION_SENSITIVE_KEYWORDS | RESTRICTED_SENSITIVE_KEYWORDS
