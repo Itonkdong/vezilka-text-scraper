@@ -1,4 +1,26 @@
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vezilka-text-scraper:local
+    container_name: vezilka-app
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      VEZILKA_JOB: ${VEZILKA_JOB:-pipeline-wikipedia}
+      VEZILKA_JOB_ARGS: ${VEZILKA_JOB_ARGS:-}
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "exec $${VEZILKA_JOB:-pipeline-wikipedia} $${VEZILKA_JOB_ARGS:-}"
+
   postgres:
     image: postgres:16-alpine
     container_name: vezilka-postgres

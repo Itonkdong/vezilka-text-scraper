@@ -243,6 +243,21 @@ def test_read_articles_reconstructs_cleaned_articles_from_database(
     assert articles[0].source_categories == ["Географија"]
 
 
+def test_read_articles_allows_unlimited_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = ArticleDatabaseAdapter(_database_config(tmp_path, monkeypatch))
+    adapter.initialize_schema()
+    adapter.persist_articles(
+        [_article(page_id=1, title="Прва"), _article(page_id=2, title="Втора")]
+    )
+
+    articles = adapter.read_articles(article_limit=None)
+
+    assert [article.title for article in articles] == ["Прва", "Втора"]
+
+
 def test_persist_articles_upserts_and_replaces_sections(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

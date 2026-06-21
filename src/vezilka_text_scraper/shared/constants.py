@@ -42,6 +42,7 @@ DEFAULT_DISPLAY_CONFIG_PATH = Path("configs/display.yaml")
 DEFAULT_DISPLAY_INPUT_PATH = None
 DEFAULT_DISPLAY_ARTICLE_LIMIT = 3
 DEFAULT_DISPLAY_SOURCE = "file"
+DEFAULT_DISPLAY_RANDOM_SAMPLE = False
 DEFAULT_PERSIST_CONFIG_PATH = Path("configs/persist.yaml")
 DEFAULT_PERSIST_INPUT_PATH = None
 DEFAULT_PERSIST_ARTICLE_LIMIT = None
@@ -67,16 +68,16 @@ WIKIPEDIA_CANONICAL_BASE_URL = "https://mk.wikipedia.org/wiki"
 
 SUITABLE_WIKIPEDIA_CATEGORIES = frozenset(
     {
-        "Биологија",
         "Географија",
-        "Историја",
-        "Култура",
+        "Биологија",
         "Математика",
         "Наука",
-        "Образование",
-        "Спорт",
         "Технологија",
-        "Уметност",
+        "Архитектура",
+        "Земјоделство",
+        "Животни",
+        "Растенија",
+        "Астрономија",
     }
 )
 
@@ -85,6 +86,8 @@ STOP_SECTION_TITLES = frozenset(
         "Белешки",
         "Видете исто така",
         "Извори",
+        "Дополнителна литература",
+        "Литература",
         "Наводи",
         "Надворешни врски",
         "Поврзано",

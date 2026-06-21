@@ -18,7 +18,7 @@ from vezilka_text_scraper.services.article_display import ArticleDisplayService
 from vezilka_text_scraper.services.clean_config import CleanConfig
 from vezilka_text_scraper.services.configuration import ConfigurationService
 from vezilka_text_scraper.services.display_config import DisplayConfig
-from vezilka_text_scraper.services.persist_config import PersistConfig
+from vezilka_text_scraper.services.persist_config import DatabaseType, PersistConfig
 from vezilka_text_scraper.services.pipeline_config import PipelineConfig, PipelineDisplaySource
 from vezilka_text_scraper.services.scrape_config import ScrapeConfig
 from vezilka_text_scraper.shared.constants import DEFAULT_PIPELINE_CONFIG_PATH
@@ -43,6 +43,7 @@ class PipelineJobResult(BaseModel):
     save_scraped_articles: bool
     save_cleaned_articles: bool
     persist_to_database: bool
+    persist_database_type: DatabaseType | None = None
     batch_size: int
     batch_count: int = Field(default=0, ge=0)
     run_display: bool
@@ -123,12 +124,14 @@ class WikipediaPipelineJob:
 
             persist_inserted_count = 0
             persist_updated_count = 0
+            persist_database_type: DatabaseType | None = None
             database_adapter: ArticleDatabaseAdapter | None = None
             if config.persist_to_database:
                 persist_config = self._configuration_service.load(
                     config.persist_config_path,
                     PersistConfig,
                 )
+                persist_database_type = persist_config.database.type
                 database_adapter = ArticleDatabaseAdapter(persist_config.database)
                 database_adapter.initialize_schema()
 
@@ -155,6 +158,7 @@ class WikipediaPipelineJob:
                     "save_scraped_articles": config.save_scraped_articles,
                     "save_cleaned_articles": config.save_cleaned_articles,
                     "persist_to_database": config.persist_to_database,
+                    "persist_database_type": persist_database_type,
                     "batch_size": config.batch_size,
                     "run_display": config.run_display,
                     "display_source": config.display_source,
@@ -261,6 +265,7 @@ class WikipediaPipelineJob:
                 save_scraped_articles=config.save_scraped_articles,
                 save_cleaned_articles=config.save_cleaned_articles,
                 persist_to_database=config.persist_to_database,
+                persist_database_type=persist_database_type,
                 batch_size=config.batch_size,
                 batch_count=batch_count,
                 run_display=config.run_display,
@@ -312,6 +317,7 @@ class WikipediaPipelineJob:
             save_scraped_articles=False,
             save_cleaned_articles=False,
             persist_to_database=False,
+            persist_database_type=None,
             batch_size=0,
             run_display=False,
             display_source="file",
@@ -335,6 +341,7 @@ class WikipediaPipelineJob:
             "Save raw": result.save_scraped_articles,
             "Save clean": result.save_cleaned_articles,
             "Persist": result.persist_to_database,
+            "DB type": result.persist_database_type or "-",
             "Batch size": result.batch_size,
             "Batches": result.batch_count,
             "Display": result.run_display,

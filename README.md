@@ -10,6 +10,29 @@ conda activate vezilka
 cp .env.example .env
 ```
 
+## Docker
+
+Default Docker Compose run starts Postgres and runs the full pipeline job:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The app container reads configs from the project `configs/` directory and writes outputs to the project `data/` and `logs/` directories.
+
+Override the job:
+
+```bash
+VEZILKA_JOB=clean-wikipedia docker compose up --build app
+```
+
+Pass job arguments, such as a custom config path:
+
+```bash
+VEZILKA_JOB=scrape-wikipedia VEZILKA_JOB_ARGS="configs/scrape.yaml" docker compose up --build app
+```
+
 For pip-only environments:
 
 ```bash

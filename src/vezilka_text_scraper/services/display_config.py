@@ -8,10 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from vezilka_text_scraper.shared.constants import (
     DEFAULT_DISPLAY_ARTICLE_LIMIT,
     DEFAULT_DISPLAY_INPUT_PATH,
+    DEFAULT_DISPLAY_RANDOM_SAMPLE,
     DEFAULT_DISPLAY_SOURCE,
 )
 
-DisplaySource = Literal["file", "database"]
+DisplaySource = Literal["file", "sqlite", "postgresql"]
 
 
 class DisplayConfig(BaseModel):
@@ -20,6 +21,7 @@ class DisplayConfig(BaseModel):
     source: DisplaySource = cast(DisplaySource, DEFAULT_DISPLAY_SOURCE)
     input_path: Path | None = DEFAULT_DISPLAY_INPUT_PATH
     article_limit: int = Field(default=DEFAULT_DISPLAY_ARTICLE_LIMIT, gt=0)
+    random_sample: bool = DEFAULT_DISPLAY_RANDOM_SAMPLE
 
     model_config = ConfigDict(extra="forbid")
 
@@ -29,9 +31,11 @@ class DisplayConfig(BaseModel):
         """Normalize display source aliases."""
         if isinstance(value, str):
             normalized_value = value.strip().lower()
-            if normalized_value in {"db", "database"}:
-                return "database"
+            if normalized_value in {"postgres", "postgresql"}:
+                return "postgresql"
             if normalized_value in {"file", "files", "jsonl"}:
                 return "file"
+            if normalized_value == "sqlite":
+                return "sqlite"
             return normalized_value
         return value

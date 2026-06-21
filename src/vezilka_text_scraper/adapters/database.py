@@ -209,10 +209,12 @@ class ArticleDatabaseAdapter:
             source_category_link_count=source_category_link_count,
         )
 
-    def read_articles(self, article_limit: int) -> list[CleanedArticle]:
+    def read_articles(self, article_limit: int | None) -> list[CleanedArticle]:
         """Read cleaned article records from the persisted database tables."""
         try:
             self.validate_ready()
+            limit_clause = "" if article_limit is None else "LIMIT :article_limit"
+            params = {} if article_limit is None else {"article_limit": article_limit}
             with self._engine.connect() as connection:
                 article_rows = connection.execute(
                     text(
@@ -222,10 +224,10 @@ class ArticleDatabaseAdapter:
                                word_count, char_count, section_count
                         FROM {self._table('articles')}
                         ORDER BY id
-                        LIMIT :article_limit
+                        {limit_clause}
                         """
                     ),
-                    {"article_limit": article_limit},
+                    params,
                 ).mappings()
                 return [
                     self._build_cleaned_article_from_row(connection, dict(article_row))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from random import sample
 from time import perf_counter
 from typing import Any
 
@@ -10,16 +11,19 @@ from pydantic import BaseModel, ConfigDict
 
 from vezilka_text_scraper.adapters.article_jsonl import CleanedArticleJsonlReader
 from vezilka_text_scraper.adapters.database import ArticleDatabaseAdapter
+from vezilka_text_scraper.models.article import CleanedArticle
 from vezilka_text_scraper.services.article_display import ArticleDisplayService
 from vezilka_text_scraper.services.configuration import ConfigurationService
 from vezilka_text_scraper.services.display_config import DisplayConfig, DisplaySource
-from vezilka_text_scraper.services.persist_config import DatabaseConfig
+from vezilka_text_scraper.services.persist_config import DatabaseConfig, DatabaseType
 from vezilka_text_scraper.shared.constants import DEFAULT_DISPLAY_CONFIG_PATH
 from vezilka_text_scraper.shared.logger import colorize, get_logger
 
 LOGGER = get_logger(__name__)
 DISPLAY_SOURCE_FILE: DisplaySource = "file"
-DISPLAY_SOURCE_DATABASE: DisplaySource = "database"
+DISPLAY_SOURCE_SQLITE: DisplaySource = "sqlite"
+DISPLAY_SOURCE_POSTGRESQL: DisplaySource = "postgresql"
+DATABASE_DISPLAY_SOURCES = {DISPLAY_SOURCE_SQLITE, DISPLAY_SOURCE_POSTGRESQL}
 
 
 class DisplayJobResult(BaseModel):
@@ -30,6 +34,7 @@ class DisplayJobResult(BaseModel):
     input_path: Path
     config_path: Path
     source: DisplaySource
+    random_sample: bool
     read_count: int
     displayed_count: int
     duration_seconds: float
@@ -65,15 +70,27 @@ class WikipediaDisplayJob:
         try:
             config = self._configuration_service.load(resolved_config_path, DisplayConfig)
             resolved_source = source or config.source
-            if resolved_source == DISPLAY_SOURCE_DATABASE:
-                database_adapter = ArticleDatabaseAdapter(DatabaseConfig())
-                articles = database_adapter.read_articles(config.article_limit)
+            if resolved_source in DATABASE_DISPLAY_SOURCES:
+                database_adapter = ArticleDatabaseAdapter(
+                    DatabaseConfig(type=self._database_type_for_source(resolved_source))
+                )
+                articles = database_adapter.read_articles(
+                    None if config.random_sample else config.article_limit
+                )
             else:
                 resolved_source = DISPLAY_SOURCE_FILE
                 input_path = self._reader.resolve_input_path(config.input_path)
-                articles = self._reader.read_articles(input_path, config.article_limit)
+                articles = self._reader.read_articles(
+                    input_path,
+                    None if config.random_sample else config.article_limit,
+                )
             read_count = len(articles)
-            formatted_output = self._display_service.format_articles(articles)
+            display_articles = self._select_articles(
+                articles,
+                article_limit=config.article_limit,
+                random_sample=config.random_sample,
+            )
+            formatted_output = self._display_service.format_articles(display_articles)
             if formatted_output:
                 print(formatted_output)
 
@@ -81,8 +98,9 @@ class WikipediaDisplayJob:
                 input_path=input_path,
                 config_path=resolved_config_path,
                 source=resolved_source,
+                random_sample=config.random_sample,
                 read_count=read_count,
-                displayed_count=read_count,
+                displayed_count=len(display_articles),
                 duration_seconds=perf_counter() - started_at,
             )
             LOGGER.info(
@@ -97,6 +115,7 @@ class WikipediaDisplayJob:
                 input_path=input_path,
                 config_path=resolved_config_path,
                 source=resolved_source,
+                random_sample=False,
                 read_count=read_count,
                 displayed_count=read_count,
                 duration_seconds=perf_counter() - started_at,
@@ -120,6 +139,7 @@ class WikipediaDisplayJob:
             "Status": status,
             "Config": result.config_path,
             "Source": result.source,
+            "Random": result.random_sample,
             "Input": result.input_path,
             "Read": result.read_count,
             "Displayed": result.displayed_count,
@@ -136,6 +156,25 @@ class WikipediaDisplayJob:
             lines.append(f"| {key:<12}: {str(value):<{width - 17}} |")
         lines.append(f"+{'=' * (width - 2)}+")
         return "\n".join(lines)
+
+    def _select_articles(
+        self,
+        articles: list[CleanedArticle],
+        article_limit: int,
+        random_sample: bool,
+    ) -> list[CleanedArticle]:
+        if not random_sample:
+            return articles[:article_limit]
+        if len(articles) <= article_limit:
+            return articles
+        return sample(articles, article_limit)
+
+    def _database_type_for_source(self, source: DisplaySource) -> DatabaseType:
+        if source == DISPLAY_SOURCE_SQLITE:
+            return "sqlite"
+        if source == DISPLAY_SOURCE_POSTGRESQL:
+            return "postgresql"
+        raise ValueError(f"Display source is not a database source: {source}")
 
 
 def build_wikipedia_display_job() -> WikipediaDisplayJob:
@@ -158,13 +197,21 @@ def main(config_path: Path | None = None, source: DisplaySource | None = None) -
     cli_args = sys.argv[1:]
     if cli_args:
         if any(arg in {"-h", "--help"} for arg in cli_args):
-            print("Usage: display-wikipedia [--from-file|--from-db] [config_path]")
+            print(
+                "Usage: display-wikipedia "
+                "[--from-file|--from-sqlite|--from-postgres] [config_path]"
+            )
             print(f"Default config: {WikipediaDisplayJob.default_config_path}")
             return
         remaining_args: list[str] = []
         for arg in cli_args:
             if arg == "--from-db":
-                resolved_source = DISPLAY_SOURCE_DATABASE
+                print("Use --from-sqlite or --from-postgres; --from-db is ambiguous.")
+                return
+            if arg == "--from-sqlite":
+                resolved_source = DISPLAY_SOURCE_SQLITE
+            elif arg == "--from-postgres":
+                resolved_source = DISPLAY_SOURCE_POSTGRESQL
             elif arg == "--from-file":
                 resolved_source = DISPLAY_SOURCE_FILE
             else:

@@ -213,7 +213,7 @@ def test_pipeline_persists_to_database_and_displays_from_database(
     display_config_path = step_configs["display"]
     display_config_path.write_text(
         """
-source: database
+source: sqlite
 article_limit: 1
 """,
         encoding="utf-8",
@@ -236,6 +236,7 @@ display_source: database
 
     assert result.clean_saved_count == 0
     assert result.persist_inserted_count == 2
+    assert result.persist_database_type == "sqlite"
     assert result.batch_count == 2
     assert result.displayed_count == 1
     assert "Прва" in captured.out

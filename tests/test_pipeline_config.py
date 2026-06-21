@@ -77,6 +77,8 @@ def test_load_partial_pipeline_config_uses_defaults(tmp_path: Path) -> None:
             "run_display: true\ndisplay_source: database\n"
         ),
         "display_source: api\n",
+        "display_source: sqlite\n",
+        "display_source: postgresql\n",
         "batch_size: 0\n",
         "unknown_field: true\n",
     ],

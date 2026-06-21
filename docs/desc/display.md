@@ -33,7 +33,8 @@ display-wikipedia --from-file
 Read from the configured database:
 
 ```bash
-display-wikipedia --from-db
+display-wikipedia --from-sqlite
+display-wikipedia --from-postgres
 ```
 
 Override the default config path:
@@ -56,13 +57,16 @@ The job class owns this default through `WikipediaDisplayJob.default_config_path
 ## Configuration Fields
 
 `source`
-Where to read articles from. Supported values are `file` and `database`. The default is `file`.
+Where to read articles from. Supported values are `file`, `sqlite`, and `postgresql`. Use `postgres` as a config alias for `postgresql`. The old generic `database` value is intentionally not supported because it is ambiguous.
 
 `input_path`
 Path to a processed JSONL file. When `null`, the newest `data/processed/*.jsonl` file is used. This field is ignored when using `--from-db`.
 
 `article_limit`
 Number of articles to print from the start of the selected source.
+
+`random_sample`
+When `true`, randomly samples `article_limit` articles from the selected source instead of printing the first records.
 
 ## Output
 
@@ -91,6 +95,7 @@ Job
 Status
 Config
 Source
+Random
 Input
 Read
 Displayed

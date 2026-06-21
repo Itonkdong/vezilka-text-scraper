@@ -79,7 +79,7 @@ Where display reads from. Supported values are `file` and `database`.
 
 For `file`, `save_cleaned_articles` must be `true`.
 
-For `database`, `persist_to_database` must be `true`.
+For `database`, `persist_to_database` must be `true`. The concrete database backend is not configured here. It is taken from `persist_config_path`, so the pipeline displays from the same SQLite or PostgreSQL database it just persisted into.
 
 At least one final output goal must be enabled: `save_cleaned_articles` or `persist_to_database`.
 
@@ -104,7 +104,7 @@ When `persist_to_database` is enabled, the pipeline initializes the database sch
 
 Persistence happens once per pipeline batch. If a later batch fails, earlier successful batches remain committed.
 
-The database backend is selected in `configs/persist.yaml`; actual connection values are loaded from `.env`.
+The database backend is selected in `configs/persist.yaml`; actual connection values are loaded from `.env`. Pipeline `display_source: database` always uses this same persist database config.
 
 ## Final Job Log
 
@@ -127,6 +127,7 @@ Output paths
 Raw discovered, fetched, saved, and failed counts
 Cleaned, saved, skipped, and failed counts
 Database inserted and updated counts
+Database type
 Displayed count
 Duration
 Reason, only on failure

@@ -81,6 +81,53 @@ article_limit: 1
     assert "Втора" not in captured.out
 
 
+def test_display_job_can_randomly_sample_file_articles(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    processed_dir = tmp_path / "processed"
+    processed_dir.mkdir()
+    input_path = processed_dir / "processed.jsonl"
+    input_path.write_text(
+        "\n".join(
+            [
+                json.dumps(_processed_record(1, "Прва"), ensure_ascii=False),
+                json.dumps(_processed_record(2, "Втора"), ensure_ascii=False),
+                json.dumps(_processed_record(3, "Трета"), ensure_ascii=False),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "display.yaml"
+    config_path.write_text(
+        f"""
+input_path: {input_path}
+article_limit: 1
+random_sample: true
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "vezilka_text_scraper.jobs.display.sample",
+        lambda articles, limit: [articles[1]],
+    )
+    job = WikipediaDisplayJob(
+        configuration_service=ConfigurationService(),
+        reader=CleanedArticleJsonlReader(processed_dir),
+        display_service=ArticleDisplayService(),
+    )
+
+    result = job.run(config_path)
+    captured = capsys.readouterr()
+
+    assert result.read_count == 3
+    assert result.displayed_count == 1
+    assert "Втора" in captured.out
+    assert "Прва" not in captured.out
+    assert "Трета" not in captured.out
+
+
 def test_display_job_prints_articles_from_database(
     tmp_path: Path,
     capsys: CaptureFixture[str],
@@ -122,7 +169,7 @@ def test_display_job_prints_articles_from_database(
     config_path = tmp_path / "display.yaml"
     config_path.write_text(
         """
-source: database
+source: sqlite
 article_limit: 1
 """,
         encoding="utf-8",
@@ -137,6 +184,6 @@ article_limit: 1
     captured = capsys.readouterr()
 
     assert result.displayed_count == 1
-    assert result.source == "database"
+    assert result.source == "sqlite"
     assert "Прва" in captured.out
     assert "Содржина." in captured.out

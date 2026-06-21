@@ -59,6 +59,12 @@ def test_cleaning_extracts_sections_and_removes_navigation_sections() -> None:
 == Наводи ==
 * непотребен извор
 
+== Литература ==
+* книга
+
+== Дополнителна литература ==
+* уште една книга
+
 == Поврзано ==
 * Ерупција
 * Видови на вулкански избув
@@ -76,7 +82,10 @@ def test_cleaning_extracts_sections_and_removes_navigation_sections() -> None:
     assert [section.heading for section in candidate.article.sections] == ["Географија", "Историја"]
     assert candidate.article.sections[0].content == "Воведна реченица."
     assert "Наводи" not in candidate.article.clean_text
+    assert "Литература" not in candidate.article.clean_text
+    assert "Дополнителна литература" not in candidate.article.clean_text
     assert "Поврзано" not in candidate.article.clean_text
+    assert "уште една книга" not in candidate.article.clean_text
     assert "Тектоника на плочите" not in candidate.article.clean_text
     assert candidate.article.section_count == 2
 
