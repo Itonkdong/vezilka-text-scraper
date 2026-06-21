@@ -38,4 +38,18 @@ class ConfigurationService:
         try:
             return config_model(**loaded_config)
         except ValidationError as error:
-            raise ServiceError(f"Invalid configuration: {error}") from error
+            raise ServiceError(
+                f"Invalid configuration: {self._format_validation_error(error)}"
+            ) from error
+
+    def _format_validation_error(self, error: ValidationError) -> str:
+        messages: list[str] = []
+        for detail in error.errors():
+            location = ".".join(str(part) for part in detail.get("loc", ()) if part)
+            message = str(detail.get("msg", "validation failed"))
+            message = message.removeprefix("Value error, ")
+            if location:
+                messages.append(f"{location}: {message}")
+            else:
+                messages.append(message)
+        return "; ".join(messages)

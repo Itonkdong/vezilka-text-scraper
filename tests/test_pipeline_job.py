@@ -12,7 +12,7 @@ from vezilka_text_scraper.adapters.article_jsonl import (
 from vezilka_text_scraper.adapters.mediawiki import CategoryMember, MediaWikiAdapter, RawArticle
 from vezilka_text_scraper.adapters.raw_storage import RawArticleJsonlStorageAdapter
 from vezilka_text_scraper.jobs.clean import WikipediaCleanJob
-from vezilka_text_scraper.jobs.pipeline import WikipediaPipelineJob
+from vezilka_text_scraper.jobs.pipeline import WikipediaPipelineJob, main
 from vezilka_text_scraper.jobs.scrape import WikipediaScrapeJob
 from vezilka_text_scraper.services.article_cleaning import ArticleCleaningService
 from vezilka_text_scraper.services.article_discovery import ArticleDiscoveryService
@@ -231,3 +231,24 @@ display_source: database
     assert "Прва" in captured.out
     with create_engine(f"sqlite:///{database_path}", future=True).connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM articles")).scalar_one() == 2
+
+
+def test_pipeline_main_returns_error_code_without_traceback(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    pipeline_config_path = tmp_path / "pipeline.yaml"
+    pipeline_config_path.write_text(
+        """
+save_cleaned_articles: false
+persist_to_database: false
+""",
+        encoding="utf-8",
+    )
+
+    exit_code = main(pipeline_config_path)
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Traceback" not in captured.err
+    assert "Traceback" not in captured.out

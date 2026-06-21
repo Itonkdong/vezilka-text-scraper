@@ -85,3 +85,22 @@ def test_load_invalid_pipeline_config_raises_service_error(
 
     with pytest.raises(ServiceError):
         ConfigurationService().load(config_path, PipelineConfig)
+
+
+def test_invalid_pipeline_config_error_is_user_friendly(tmp_path: Path) -> None:
+    config_path = tmp_path / "pipeline.yaml"
+    config_path.write_text(
+        """
+save_cleaned_articles: false
+persist_to_database: false
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ServiceError) as captured:
+        ConfigurationService().load(config_path, PipelineConfig)
+
+    message = str(captured.value)
+    assert "pipeline must either save cleaned JSONL or persist cleaned articles" in message
+    assert "pydantic" not in message.lower()
+    assert "input_value" not in message

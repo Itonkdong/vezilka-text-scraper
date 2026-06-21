@@ -22,6 +22,7 @@ from vezilka_text_scraper.services.persist_config import PersistConfig
 from vezilka_text_scraper.services.pipeline_config import PipelineConfig, PipelineDisplaySource
 from vezilka_text_scraper.services.scrape_config import ScrapeConfig
 from vezilka_text_scraper.shared.constants import DEFAULT_PIPELINE_CONFIG_PATH
+from vezilka_text_scraper.shared.exceptions import VezilkaTextScraperError
 from vezilka_text_scraper.shared.logger import colorize, get_logger
 
 LOGGER = get_logger(__name__)
@@ -285,7 +286,7 @@ def build_wikipedia_pipeline_job() -> WikipediaPipelineJob:
     )
 
 
-def main(config_path: Path | None = None) -> None:
+def main(config_path: Path | None = None) -> int:
     """Run the full pipeline job."""
     import sys
 
@@ -296,16 +297,21 @@ def main(config_path: Path | None = None) -> None:
         if sys.argv[1] in {"-h", "--help"}:
             print("Usage: pipeline-wikipedia [config_path]")
             print(f"Default config: {WikipediaPipelineJob.default_config_path}")
-            return
+            return 0
         resolved_config_path = Path(sys.argv[1])
 
     configure_logging()
-    result = build_wikipedia_pipeline_job().run(resolved_config_path)
+    try:
+        result = build_wikipedia_pipeline_job().run(resolved_config_path)
+    except VezilkaTextScraperError:
+        return 1
+
     print(
         f"Pipeline cleaned {result.cleaned_count} articles "
         f"({result.raw_fetched_count} raw fetched)"
     )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
