@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import SupportsInt
@@ -25,6 +26,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from vezilka_text_scraper.models.article import CleanedArticle, CleanedSection
 from vezilka_text_scraper.services.persist_config import DatabaseConfig
+from vezilka_text_scraper.shared.constants import SENSITIVITY_STATUS_SAFE
 from vezilka_text_scraper.shared.exceptions import AdapterError
 
 REQUIRED_TABLE_COLUMNS = {
@@ -42,6 +44,8 @@ REQUIRED_TABLE_COLUMNS = {
         "word_count",
         "char_count",
         "section_count",
+        "sensitivity_status",
+        "sensitivity_keywords",
         "created_at",
         "updated_at",
     },
@@ -81,6 +85,7 @@ class DatabaseInitResult(BaseModel):
     created_schema: bool = False
     existing_table_count: int = Field(ge=0)
     created_table_count: int = Field(ge=0)
+    added_column_count: int = Field(ge=0)
 
 
 class ArticleDatabaseAdapter:
@@ -147,6 +152,7 @@ class ArticleDatabaseAdapter:
 
             metadata = self._build_metadata()
             metadata.create_all(self._engine)
+            added_column_count = self._add_missing_additive_columns()
             self.validate_ready()
         except AdapterError:
             raise
@@ -157,6 +163,7 @@ class ArticleDatabaseAdapter:
             created_schema=created_schema,
             existing_table_count=len(existing_tables & set(REQUIRED_TABLE_COLUMNS)),
             created_table_count=len(missing_tables),
+            added_column_count=added_column_count,
         )
 
     def persist_articles(self, articles: list[CleanedArticle]) -> DatabasePersistResult:
@@ -221,7 +228,8 @@ class ArticleDatabaseAdapter:
                         f"""
                         SELECT id, page_id, title, url, language, revision_id,
                                last_modified, scraped_at, cleaned_at, clean_text,
-                               word_count, char_count, section_count
+                               word_count, char_count, section_count,
+                               sensitivity_status, sensitivity_keywords
                         FROM {self._table('articles')}
                         ORDER BY id
                         {limit_clause}
@@ -258,7 +266,8 @@ class ArticleDatabaseAdapter:
                             f"""
                             SELECT id, page_id, title, url, language, revision_id,
                                    last_modified, scraped_at, cleaned_at, clean_text,
-                                   word_count, char_count, section_count
+                                   word_count, char_count, section_count,
+                                   sensitivity_status, sensitivity_keywords
                             FROM {self._table('articles')}
                             WHERE page_id = :page_id
                             """
@@ -310,6 +319,38 @@ class ArticleDatabaseAdapter:
             connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
         return True
 
+    def _add_missing_additive_columns(self) -> int:
+        inspector = inspect(self._engine)
+        schema = self._effective_schema()
+        existing_tables = set(inspector.get_table_names(schema=schema))
+        if "articles" not in existing_tables:
+            return 0
+
+        existing_columns = {
+            column["name"] for column in inspector.get_columns("articles", schema=schema)
+        }
+        added_column_count = 0
+        if "sensitivity_status" not in existing_columns:
+            self._add_article_text_column(
+                "sensitivity_status",
+                SENSITIVITY_STATUS_SAFE,
+            )
+            added_column_count += 1
+        if "sensitivity_keywords" not in existing_columns:
+            self._add_article_text_column("sensitivity_keywords", "[]")
+            added_column_count += 1
+        return added_column_count
+
+    def _add_article_text_column(self, column_name: str, default_value: str) -> None:
+        escaped_default = default_value.replace("'", "''")
+        with self._engine.begin() as connection:
+            connection.execute(
+                text(
+                    f"ALTER TABLE {self._table('articles')} "
+                    f"ADD COLUMN {column_name} TEXT NOT NULL DEFAULT '{escaped_default}'"
+                )
+            )
+
     def _build_metadata(self) -> MetaData:
         schema = self._effective_schema()
         metadata = MetaData(schema=schema)
@@ -329,6 +370,8 @@ class ArticleDatabaseAdapter:
             Column("word_count", Integer, nullable=False),
             Column("char_count", Integer, nullable=False),
             Column("section_count", Integer, nullable=False),
+            Column("sensitivity_status", Text, nullable=False),
+            Column("sensitivity_keywords", Text, nullable=False),
             Column("created_at", Text, nullable=False),
             Column("updated_at", Text, nullable=False),
         )
@@ -393,12 +436,14 @@ class ArticleDatabaseAdapter:
                 INSERT INTO {self._table('articles')} (
                     page_id, title, url, language, revision_id, last_modified,
                     scraped_at, cleaned_at, clean_text, word_count, char_count,
-                    section_count, created_at, updated_at
+                    section_count, sensitivity_status, sensitivity_keywords,
+                    created_at, updated_at
                 )
                 VALUES (
                     :page_id, :title, :url, :language, :revision_id, :last_modified,
                     :scraped_at, :cleaned_at, :clean_text, :word_count, :char_count,
-                    :section_count, :created_at, :updated_at
+                    :section_count, :sensitivity_status, :sensitivity_keywords,
+                    :created_at, :updated_at
                 )
                 """
             ),
@@ -434,6 +479,8 @@ class ArticleDatabaseAdapter:
                     word_count = :word_count,
                     char_count = :char_count,
                     section_count = :section_count,
+                    sensitivity_status = :sensitivity_status,
+                    sensitivity_keywords = :sensitivity_keywords,
                     updated_at = :updated_at
                 WHERE id = :article_id
                 """
@@ -587,6 +634,10 @@ class ArticleDatabaseAdapter:
             word_count=self._to_int(article_row["word_count"]),
             char_count=self._to_int(article_row["char_count"]),
             section_count=self._to_int(article_row["section_count"]),
+            sensitivity_status=str(article_row["sensitivity_status"]),
+            sensitivity_keywords=self._decode_string_list(
+                article_row["sensitivity_keywords"]
+            ),
             sections=sections,
         )
 
@@ -635,7 +686,25 @@ class ArticleDatabaseAdapter:
             "word_count": article.word_count,
             "char_count": article.char_count,
             "section_count": article.section_count,
+            "sensitivity_status": article.sensitivity_status,
+            "sensitivity_keywords": json.dumps(
+                article.sensitivity_keywords,
+                ensure_ascii=False,
+            ),
         }
 
     def _now(self) -> str:
         return datetime.now(UTC).isoformat()
+
+    def _decode_string_list(self, value: object) -> list[str]:
+        if value is None:
+            return []
+        try:
+            decoded = json.loads(str(value))
+        except json.JSONDecodeError as error:
+            raise AdapterError("Expected JSON encoded string list") from error
+        if not isinstance(decoded, list) or not all(
+            isinstance(item, str) for item in decoded
+        ):
+            raise AdapterError("Expected JSON encoded string list")
+        return decoded

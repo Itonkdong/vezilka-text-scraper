@@ -42,11 +42,11 @@ The job class owns this default through `WikipediaScrapeJob.default_config_path`
 ## Configuration Fields
 
 `categories`
-List of root Wikipedia categories to crawl. The user may only choose from the supported category list:
+List of root Wikipedia categories to crawl. The user may only choose from the supported category list, or use `categories: all` to crawl every supported category:
 
 ```text
-Биологија, Географија, Историја, Култура, Математика,
-Наука, Образование, Спорт, Технологија, Уметност
+Архитектура, Астрономија, Биологија, Географија, Животни,
+Земјоделство, Математика, Наука, Растенија, Технологија
 ```
 
 `recursive`

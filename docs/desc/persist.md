@@ -4,7 +4,7 @@
 
 The `persist` job reads cleaned article records from `data/processed` and stores them in a SQL database.
 
-It persists article metadata, cleaned text, sections, Wikipedia categories, source discovery categories, and article-category relationships. The job validates that the database connection, schema, tables, and required columns already exist before writing.
+It persists article metadata, cleaned text, sensitivity labels, sections, Wikipedia categories, source discovery categories, and article-category relationships. The job validates that the database connection, schema, tables, and required columns already exist before writing.
 
 This job does not create or migrate database schema. Schema creation belongs to a separate init or migration job.
 

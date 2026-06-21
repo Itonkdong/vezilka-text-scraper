@@ -17,7 +17,10 @@ from vezilka_text_scraper.models.article import CleanedArticle, RawArticleInput
 from vezilka_text_scraper.services.article_cleaning import ArticleCleaningService
 from vezilka_text_scraper.services.clean_config import CleanConfig
 from vezilka_text_scraper.services.configuration import ConfigurationService
-from vezilka_text_scraper.shared.constants import DEFAULT_CLEAN_CONFIG_PATH
+from vezilka_text_scraper.shared.constants import (
+    DEFAULT_CLEAN_CONFIG_PATH,
+    SENSITIVITY_STATUS_SAFE,
+)
 from vezilka_text_scraper.shared.exceptions import AdapterError, JobError, ServiceError
 from vezilka_text_scraper.shared.logger import colorize, get_logger
 
@@ -195,6 +198,13 @@ class WikipediaCleanJob:
                             f"({raw_article.page_id}): {skip_reason}"
                         )
                     continue
+                if candidate.article.sensitivity_status != SENSITIVITY_STATUS_SAFE:
+                    LOGGER.warning(
+                        f"Sensitive article flagged as "
+                        f"{candidate.article.sensitivity_status}: "
+                        f"'{raw_article.title}' ({raw_article.page_id}); "
+                        f"keywords={candidate.article.sensitivity_keywords}"
+                    )
                 cleaned_articles.append(candidate.article)
             except ServiceError as error:
                 failed_count += 1

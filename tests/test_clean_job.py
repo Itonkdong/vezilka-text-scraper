@@ -175,6 +175,51 @@ log_skipped_articles: false
     assert "Skipping cleaned article 'Кратко' (1)" not in caplog.text
 
 
+def test_clean_job_warns_for_sensitive_articles(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    raw_dir = tmp_path / "raw"
+    processed_dir = tmp_path / "processed"
+    raw_dir.mkdir()
+    input_path = raw_dir / "raw.jsonl"
+    input_path.write_text(
+        json.dumps(
+            _raw_record(
+                1,
+                "Осетлива",
+                "Оваа статија спомнува спор за името во телото.",
+            ),
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "clean.yaml"
+    config_path.write_text(
+        f"""
+input_path: {input_path}
+output_run_name: clean_test
+min_word_count: 0
+min_section_word_count: 0
+continue_on_error: true
+""",
+        encoding="utf-8",
+    )
+    job = WikipediaCleanJob(
+        configuration_service=ConfigurationService(),
+        raw_reader=RawArticleJsonlReader(raw_dir),
+        cleaning_service=ArticleCleaningService(),
+        cleaned_writer=CleanedArticleJsonlWriter(processed_dir),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="vezilka_text_scraper.jobs.clean"):
+        result = job.run(config_path)
+
+    assert result.cleaned_count == 1
+    assert "Sensitive article flagged as restricted" in caplog.text
+    assert "спор за името" in caplog.text
+
+
 def test_clean_job_always_logs_failed_articles(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,

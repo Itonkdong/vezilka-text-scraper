@@ -103,3 +103,103 @@ DISAMBIGUATION_TITLE_MARKERS = frozenset(
         "појаснителница",
     }
 )
+
+SENSITIVITY_STATUS_SAFE = "safe"
+SENSITIVITY_STATUS_CAUTION = "caution"
+SENSITIVITY_STATUS_RESTRICTED = "restricted"
+
+CAUTION_SENSITIVE_KEYWORDS = frozenset({
+    # Politics
+    "политика",
+    "политичар",
+    "политичка партија",
+    "избори",
+    "влада",
+    "парламент",
+    "министерство",
+    "претседател",
+
+    # Nationalism & identity
+    "национализам",
+    "етнички конфликт",
+    "идентитет",
+    "малцинство",
+
+    # Macedonia-related neighboring countries and groups
+    "србија",
+    "бугарија",
+    "грција",
+    "албанија",
+    "срби",
+    "бугари",
+    "грци",
+    "албанци",
+    "косовари",
+    "косово",
+    "голема албанија",
+
+    # Religion
+    "религија",
+    "црква",
+    "ислам",
+    "христијанство",
+    "православие",
+    "католицизам",
+    "теологија",
+})
+
+RESTRICTED_SENSITIVE_KEYWORDS = frozenset({
+    # Macedonia-related disputes
+    "македонско прашање",
+    "спор за името",
+    "бугаризација",
+    "хеленизација",
+    "србизација",
+    "асимилација",
+
+    # Nationalism & identity conflict
+    "етнички конфликт",
+
+    # Extremism
+    "фашизам",
+    "нацизам",
+    "неонацизам",
+    "екстремизам",
+    "радикализам",
+    "тероризам",
+
+    # Military
+    "војна",
+    "битка",
+    "окупација",
+    "инвазија",
+    "геноцид",
+    "војска",
+    "воена операција",
+
+    # Crime
+    "убиство",
+    "силување",
+    "терористички напад",
+    "криминал",
+    "трговија со дрога",
+    "трговија со луѓе",
+    "тортура",
+
+    # Explicit content
+    "порнографија",
+    "еротика",
+    "сексуален однос",
+    "проституција",
+
+    # Self-harm
+    "самоубиство",
+    "самоповредување",
+
+    # Disasters
+    "масакр",
+    "катастрофа",
+    "авионска несреќа",
+})
+
+SENSITIVE_KEYWORDS = CAUTION_SENSITIVE_KEYWORDS | RESTRICTED_SENSITIVE_KEYWORDS

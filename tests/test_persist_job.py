@@ -59,6 +59,8 @@ def _create_required_schema(engine: Engine) -> None:
                     word_count INTEGER NOT NULL,
                     char_count INTEGER NOT NULL,
                     section_count INTEGER NOT NULL,
+                    sensitivity_status TEXT NOT NULL,
+                    sensitivity_keywords TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )

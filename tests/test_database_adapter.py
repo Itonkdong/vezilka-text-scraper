@@ -10,6 +10,7 @@ from vezilka_text_scraper.adapters.database import ArticleDatabaseAdapter
 from vezilka_text_scraper.models.article import CleanedArticle, CleanedSection
 from vezilka_text_scraper.services.persist_config import DatabaseConfig
 from vezilka_text_scraper.shared import env_variables
+from vezilka_text_scraper.shared.constants import SENSITIVITY_STATUS_RESTRICTED
 from vezilka_text_scraper.shared.exceptions import AdapterError
 
 
@@ -64,6 +65,8 @@ def _create_required_schema(engine: Engine) -> None:
                     word_count INTEGER NOT NULL,
                     char_count INTEGER NOT NULL,
                     section_count INTEGER NOT NULL,
+                    sensitivity_status TEXT NOT NULL,
+                    sensitivity_keywords TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -165,6 +168,61 @@ def test_initialize_schema_skips_existing_sqlite_tables(
     assert result.created_table_count == 0
 
 
+def test_initialize_schema_adds_missing_sensitivity_columns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = ArticleDatabaseAdapter(_database_config(tmp_path, monkeypatch))
+    with adapter.engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE articles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    page_id INTEGER NOT NULL UNIQUE,
+                    title TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    revision_id INTEGER NOT NULL,
+                    last_modified TEXT NOT NULL,
+                    scraped_at TEXT NOT NULL,
+                    cleaned_at TEXT NOT NULL,
+                    clean_text TEXT NOT NULL,
+                    word_count INTEGER NOT NULL,
+                    char_count INTEGER NOT NULL,
+                    section_count INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+        )
+        for statement in [
+            """
+            CREATE TABLE sections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id INTEGER NOT NULL,
+                heading TEXT NOT NULL,
+                content TEXT NOT NULL,
+                word_count INTEGER NOT NULL,
+                char_count INTEGER NOT NULL,
+                position INTEGER NOT NULL
+            )
+            """,
+            "CREATE TABLE wiki_categories (id INTEGER PRIMARY KEY, name TEXT UNIQUE)",
+            "CREATE TABLE article_wiki_categories (article_id INTEGER, category_id INTEGER)",
+            "CREATE TABLE source_categories (id INTEGER PRIMARY KEY, name TEXT UNIQUE)",
+            "CREATE TABLE article_source_categories (article_id INTEGER, category_id INTEGER)",
+        ]:
+            connection.execute(text(statement))
+
+    result = adapter.initialize_schema()
+
+    assert result.created_table_count == 0
+    assert result.added_column_count == 2
+    adapter.validate_ready()
+
+
 def test_sqlite_validation_fails_when_required_table_is_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -241,6 +299,26 @@ def test_read_articles_reconstructs_cleaned_articles_from_database(
     assert articles[0].sections[0].heading == "Прва"
     assert articles[0].categories == ["Категорија:Географија", "Категорија:Наука"]
     assert articles[0].source_categories == ["Географија"]
+
+
+def test_persist_articles_round_trips_sensitivity_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = ArticleDatabaseAdapter(_database_config(tmp_path, monkeypatch))
+    adapter.initialize_schema()
+    article = _article().model_copy(
+        update={
+            "sensitivity_status": SENSITIVITY_STATUS_RESTRICTED,
+            "sensitivity_keywords": ["спор за името"],
+        }
+    )
+
+    adapter.persist_articles([article])
+    articles = adapter.read_articles(article_limit=None)
+
+    assert articles[0].sensitivity_status == SENSITIVITY_STATUS_RESTRICTED
+    assert articles[0].sensitivity_keywords == ["спор за името"]
 
 
 def test_read_articles_allows_unlimited_limit(
@@ -331,6 +409,8 @@ def test_persist_articles_rolls_back_on_write_error(
                     word_count INTEGER NOT NULL,
                     char_count INTEGER NOT NULL,
                     section_count INTEGER NOT NULL,
+                    sensitivity_status TEXT NOT NULL,
+                    sensitivity_keywords TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )

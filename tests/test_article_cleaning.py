@@ -1,6 +1,11 @@
 from vezilka_text_scraper.models.article import RawArticleInput
 from vezilka_text_scraper.services.article_cleaning import ArticleCleaningService
 from vezilka_text_scraper.services.clean_config import CleanConfig
+from vezilka_text_scraper.shared.constants import (
+    SENSITIVITY_STATUS_CAUTION,
+    SENSITIVITY_STATUS_RESTRICTED,
+    SENSITIVITY_STATUS_SAFE,
+)
 
 
 def _raw_article(raw_wikitext: str, title: str = "Географија") -> RawArticleInput:
@@ -299,3 +304,42 @@ def test_cleaning_drops_html_code_sections() -> None:
     assert "Микроформат" not in candidate.article.clean_text
     assert "<span" not in candidate.article.clean_text
     assert "50.167958" not in candidate.article.clean_text
+
+
+def test_cleaning_marks_safe_articles_without_sensitive_keywords() -> None:
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article("Географија е наука за Земјата и природните појави."),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert candidate.article.sensitivity_status == SENSITIVITY_STATUS_SAFE
+    assert candidate.article.sensitivity_keywords == []
+
+
+def test_cleaning_marks_caution_articles_from_whole_article_text() -> None:
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article("Текстот ја спомнува Грција во географски контекст."),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert candidate.article.sensitivity_status == SENSITIVITY_STATUS_CAUTION
+    assert "грција" in candidate.article.sensitivity_keywords
+
+
+def test_cleaning_marks_restricted_articles_from_whole_article_text() -> None:
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article("Овој текст содржи спор за името во телото на статијата."),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert candidate.article.sensitivity_status == SENSITIVITY_STATUS_RESTRICTED
+    assert "спор за името" in candidate.article.sensitivity_keywords

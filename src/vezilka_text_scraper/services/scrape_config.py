@@ -38,6 +38,19 @@ class ScrapeConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @field_validator("categories", mode="before")
+    @classmethod
+    def expand_all_categories(cls, value: object) -> object:
+        """Allow `categories: all` as shorthand for every supported category."""
+        if isinstance(value, str) and value.strip().casefold() == "all":
+            return sorted(SUITABLE_WIKIPEDIA_CATEGORIES)
+        if isinstance(value, list) and any(
+            isinstance(category, str) and category.strip().casefold() == "all"
+            for category in value
+        ):
+            return sorted(SUITABLE_WIKIPEDIA_CATEGORIES)
+        return value
+
     @field_validator("categories")
     @classmethod
     def validate_categories(cls, value: list[str]) -> list[str]:

@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from vezilka_text_scraper.shared.constants import SENSITIVITY_STATUS_SAFE
+
 
 class RawArticleInput(BaseModel):
     """Raw article record read from scraper JSONL output."""
@@ -51,4 +53,6 @@ class CleanedArticle(BaseModel):
     word_count: int = Field(ge=0)
     char_count: int = Field(ge=0)
     section_count: int = Field(ge=0)
+    sensitivity_status: str = SENSITIVITY_STATUS_SAFE
+    sensitivity_keywords: list[str] = Field(default_factory=list)
     sections: list[CleanedSection]

@@ -158,6 +158,12 @@ Character count of `clean_text`.
 `section_count`
 Number of cleaned sections.
 
+`sensitivity_status`
+Article sensitivity label computed from the whole cleaned article, title, sections, and category metadata. Values are `safe`, `caution`, and `restricted`.
+
+`sensitivity_keywords`
+Sensitive keywords that triggered the article label. Empty for `safe` articles.
+
 `sections`
 Ordered list of cleaned sections. Each section has `heading`, `content`, `word_count`, `char_count`, and `position`.
 

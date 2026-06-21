@@ -11,7 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from vezilka_text_scraper.models.article import CleanedArticle, CleanedSection, RawArticleInput
 from vezilka_text_scraper.services.clean_config import CleanConfig
 from vezilka_text_scraper.shared.constants import (
+    CAUTION_SENSITIVE_KEYWORDS,
     DISAMBIGUATION_TITLE_MARKERS,
+    RESTRICTED_SENSITIVE_KEYWORDS,
+    SENSITIVITY_STATUS_CAUTION,
+    SENSITIVITY_STATUS_RESTRICTED,
+    SENSITIVITY_STATUS_SAFE,
     STOP_SECTION_TITLES,
 )
 from vezilka_text_scraper.shared.exceptions import ServiceError
@@ -82,6 +87,11 @@ class ArticleCleaningService:
             raise ServiceError(f"Could not clean article '{article.title}'") from error
 
         clean_text = self._build_clean_text(article.title, cleaned_sections)
+        sensitivity_status, sensitivity_keywords = self._classify_sensitivity(
+            article,
+            clean_text,
+            cleaned_sections,
+        )
         word_count = self._count_words(clean_text)
         cleaned_article = CleanedArticle(
             page_id=article.page_id,
@@ -98,6 +108,8 @@ class ArticleCleaningService:
             word_count=word_count,
             char_count=len(clean_text),
             section_count=len(cleaned_sections),
+            sensitivity_status=sensitivity_status,
+            sensitivity_keywords=sensitivity_keywords,
             sections=cleaned_sections,
         )
         return CleanedArticleCandidate(article=cleaned_article, word_count=word_count)
@@ -279,6 +291,38 @@ class ArticleCleaningService:
             for line in text.splitlines()
             if line.strip() and CODE_LINE_PATTERN.search(line)
         )
+
+    def _classify_sensitivity(
+        self,
+        article: RawArticleInput,
+        clean_text: str,
+        sections: list[CleanedSection],
+    ) -> tuple[str, list[str]]:
+        scan_text = "\n".join(
+            [
+                article.title,
+                clean_text,
+                "\n".join(article.categories),
+                "\n".join(article.source_categories),
+                "\n".join(section.heading for section in sections),
+                "\n".join(section.content for section in sections),
+            ]
+        ).casefold()
+        restricted_matches = self._matched_keywords(
+            scan_text,
+            RESTRICTED_SENSITIVE_KEYWORDS,
+        )
+        caution_matches = self._matched_keywords(scan_text, CAUTION_SENSITIVE_KEYWORDS)
+        matched_keywords = sorted(set(restricted_matches + caution_matches))
+
+        if restricted_matches:
+            return SENSITIVITY_STATUS_RESTRICTED, matched_keywords
+        if caution_matches:
+            return SENSITIVITY_STATUS_CAUTION, matched_keywords
+        return SENSITIVITY_STATUS_SAFE, []
+
+    def _matched_keywords(self, text: str, keywords: frozenset[str]) -> list[str]:
+        return [keyword for keyword in keywords if keyword.casefold() in text]
 
     def _remove_references(self, wikicode: mwparserfromhell.wikicode.Wikicode) -> None:
         for tag in list(wikicode.filter_tags(recursive=True)):

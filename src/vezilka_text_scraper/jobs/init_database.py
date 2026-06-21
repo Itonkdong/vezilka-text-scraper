@@ -28,6 +28,7 @@ class InitDatabaseJobResult(BaseModel):
     created_schema: bool
     existing_table_count: int = Field(ge=0)
     created_table_count: int = Field(ge=0)
+    added_column_count: int = Field(ge=0)
     duration_seconds: float
 
 
@@ -61,6 +62,7 @@ class InitDatabaseJob:
                 created_schema=initialized.created_schema,
                 existing_table_count=initialized.existing_table_count,
                 created_table_count=initialized.created_table_count,
+                added_column_count=initialized.added_column_count,
                 duration_seconds=perf_counter() - started_at,
             )
             LOGGER.info(
@@ -78,6 +80,7 @@ class InitDatabaseJob:
                 created_schema=False,
                 existing_table_count=0,
                 created_table_count=0,
+                added_column_count=0,
                 duration_seconds=perf_counter() - started_at,
             )
             LOGGER.error(
@@ -107,6 +110,7 @@ class InitDatabaseJob:
             "Schema made": result.created_schema,
             "Existing": result.existing_table_count,
             "Created": result.created_table_count,
+            "Columns": result.added_column_count,
             "Duration": f"{result.duration_seconds:.2f}s",
         }
         if error is not None:
