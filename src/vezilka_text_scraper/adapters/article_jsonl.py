@@ -117,7 +117,11 @@ class CleanedArticleJsonlReader:
             raise AdapterError(f"No processed JSONL files found in {self._processed_data_dir}")
         return candidates[0]
 
-    def read_articles(self, input_path: Path, article_limit: int) -> list[CleanedArticle]:
+    def read_articles(
+        self,
+        input_path: Path,
+        article_limit: int | None,
+    ) -> list[CleanedArticle]:
         """Read cleaned article records from a JSONL file.
 
         Raises:
@@ -127,7 +131,7 @@ class CleanedArticleJsonlReader:
         try:
             with input_path.open(encoding="utf-8") as input_file:
                 for line_number, line in enumerate(input_file, start=1):
-                    if len(articles) >= article_limit:
+                    if article_limit is not None and len(articles) >= article_limit:
                         break
                     stripped_line = line.strip()
                     if not stripped_line:

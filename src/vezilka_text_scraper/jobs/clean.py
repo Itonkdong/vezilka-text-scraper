@@ -90,17 +90,23 @@ class WikipediaCleanJob:
                         config,
                         cleaned_at,
                     )
-                    if self._cleaning_service.should_skip_article(candidate, config):
+                    skip_reason = self._cleaning_service.get_skip_reason(candidate, config)
+                    if skip_reason is not None:
                         skipped_count += 1
+                        if config.log_skipped_articles:
+                            LOGGER.info(
+                                f"Skipping cleaned article '{raw_article.title}' "
+                                f"({raw_article.page_id}): {skip_reason}"
+                            )
                         continue
                     cleaned_articles.append(candidate.article)
                 except ServiceError as error:
                     failed_count += 1
+                    LOGGER.warning(
+                        f"Failed cleaning raw article '{raw_article.title}' "
+                        f"({raw_article.page_id}): {error}"
+                    )
                     if config.continue_on_error:
-                        LOGGER.warning(
-                            f"Skipping raw article '{raw_article.title}' "
-                            f"({raw_article.page_id}): {error}"
-                        )
                         continue
                     raise JobError(
                         f"Could not clean article '{raw_article.title}' ({raw_article.page_id})"

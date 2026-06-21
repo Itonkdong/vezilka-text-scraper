@@ -96,12 +96,22 @@ def test_cleaning_filter_skips_short_and_disambiguation_articles() -> None:
     )
 
     assert service.should_skip_article(short_candidate, config) is True
+    assert service.get_skip_reason(short_candidate, config) == (
+        "word count 1 is below minimum 10"
+    )
     assert (
         service.should_skip_article(
             disambiguation_candidate,
             CleanConfig(min_word_count=0, skip_disambiguation_pages=True),
         )
         is True
+    )
+    assert (
+        service.get_skip_reason(
+            disambiguation_candidate,
+            CleanConfig(min_word_count=0, skip_disambiguation_pages=True),
+        )
+        == "title looks like a disambiguation page"
     )
 
 

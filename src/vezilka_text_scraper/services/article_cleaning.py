@@ -90,11 +90,24 @@ class ArticleCleaningService:
 
     def should_skip_article(self, candidate: CleanedArticleCandidate, config: CleanConfig) -> bool:
         """Return whether a cleaned article should be excluded from processed output."""
+        return self.get_skip_reason(candidate, config) is not None
+
+    def get_skip_reason(
+        self,
+        candidate: CleanedArticleCandidate,
+        config: CleanConfig,
+    ) -> str | None:
+        """Return the reason a cleaned article should be skipped, if any."""
         if candidate.word_count < config.min_word_count:
-            return True
-        return config.skip_disambiguation_pages and self._is_disambiguation_title(
+            return (
+                f"word count {candidate.word_count} is below minimum "
+                f"{config.min_word_count}"
+            )
+        if config.skip_disambiguation_pages and self._is_disambiguation_title(
             candidate.article.title
-        )
+        ):
+            return "title looks like a disambiguation page"
+        return None
 
     def _clean_sections(
         self,

@@ -15,6 +15,7 @@ dependencies = [
     "lxml>=5,<6",
     "pydantic>=2.8,<3",
     "SQLAlchemy>=2.0,<3",
+    "psycopg[binary]>=3,<4",
     "tqdm>=4.66,<5",
     "python-dotenv>=1.0,<2",
     "PyYAML>=6.0,<7",
@@ -24,6 +25,8 @@ dependencies = [
 scrape-wikipedia = "vezilka_text_scraper.jobs.scrape:main"
 clean-wikipedia = "vezilka_text_scraper.jobs.clean:main"
 display-wikipedia = "vezilka_text_scraper.jobs.display:main"
+persist-wikipedia = "vezilka_text_scraper.jobs.persist:main"
+init-database = "vezilka_text_scraper.jobs.init_database:main"
 
 [project.optional-dependencies]
 dev = [

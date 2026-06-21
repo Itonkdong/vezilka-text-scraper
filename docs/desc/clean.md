@@ -59,6 +59,9 @@ Whether to skip articles whose titles look like disambiguation pages.
 `continue_on_error`
 Whether to skip failed records and continue. If false, the job fails on the first cleaning error.
 
+`log_skipped_articles`
+Whether to log each article skipped by quality filters. Defaults to `true`. Failed articles are always logged.
+
 `remove_templates`
 Remove MediaWiki templates such as infoboxes and metadata boxes.
 

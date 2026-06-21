@@ -5,6 +5,7 @@ import pytest
 from vezilka_text_scraper.services.clean_config import CleanConfig
 from vezilka_text_scraper.services.configuration import ConfigurationService
 from vezilka_text_scraper.shared.constants import (
+    DEFAULT_LOG_SKIPPED_ARTICLES,
     DEFAULT_MIN_SECTION_WORD_COUNT,
     DEFAULT_MIN_WORD_COUNT,
     DEFAULT_SKIP_DISAMBIGUATION_PAGES,
@@ -22,6 +23,7 @@ min_word_count: 10
 min_section_word_count: 4
 skip_disambiguation_pages: false
 continue_on_error: false
+log_skipped_articles: false
 remove_templates: false
 remove_references: false
 remove_tables: false
@@ -42,6 +44,7 @@ normalize_whitespace: false
     assert config.min_section_word_count == 4
     assert config.skip_disambiguation_pages is False
     assert config.continue_on_error is False
+    assert config.log_skipped_articles is False
     assert config.remove_templates is False
     assert config.normalize_whitespace is False
 
@@ -58,6 +61,7 @@ def test_load_partial_clean_config_uses_defaults(tmp_path: Path) -> None:
     assert config.min_section_word_count == DEFAULT_MIN_SECTION_WORD_COUNT
     assert config.skip_disambiguation_pages is DEFAULT_SKIP_DISAMBIGUATION_PAGES
     assert config.continue_on_error is True
+    assert config.log_skipped_articles is DEFAULT_LOG_SKIPPED_ARTICLES
 
 
 @pytest.mark.parametrize(

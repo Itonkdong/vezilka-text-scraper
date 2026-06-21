@@ -5,6 +5,7 @@ min_word_count: 100
 min_section_word_count: 10
 skip_disambiguation_pages: true
 continue_on_error: true
+log_skipped_articles: true
 
 remove_templates: true
 remove_references: true

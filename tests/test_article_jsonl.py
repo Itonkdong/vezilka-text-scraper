@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from vezilka_text_scraper.adapters.article_jsonl import (
+    CleanedArticleJsonlReader,
     CleanedArticleJsonlWriter,
     RawArticleJsonlReader,
 )
@@ -91,3 +92,41 @@ def test_cleaned_writer_writes_jsonl(tmp_path: Path) -> None:
     assert count == 1
     assert records[0]["title"] == "Географија"
     assert records[0]["sections"][0]["heading"] == "Географија"
+
+
+def test_cleaned_reader_allows_unlimited_article_limit(tmp_path: Path) -> None:
+    input_path = tmp_path / "processed.jsonl"
+    section = {
+        "heading": "Географија",
+        "content": "Географија е наука.",
+        "word_count": 3,
+        "char_count": 17,
+        "position": 0,
+    }
+    base_record = {
+        "url": "https://mk.wikipedia.org/wiki/Географија",
+        "language": "mk",
+        "categories": ["Категорија:Географија"],
+        "revision_id": 10,
+        "last_modified": "2026-01-01T00:00:00Z",
+        "scraped_at": "2026-06-21T00:00:00+00:00",
+        "cleaned_at": "2026-06-21T01:00:00+00:00",
+        "source_categories": ["Географија"],
+        "clean_text": "Географија\n\nГеографија е наука.",
+        "word_count": 4,
+        "char_count": 30,
+        "section_count": 1,
+        "sections": [section],
+    }
+    records = [
+        {"page_id": 1, "title": "Прва", **base_record},
+        {"page_id": 2, "title": "Втора", **base_record},
+    ]
+    input_path.write_text(
+        "\n".join(json.dumps(record, ensure_ascii=False) for record in records),
+        encoding="utf-8",
+    )
+
+    articles = CleanedArticleJsonlReader(tmp_path).read_articles(input_path, None)
+
+    assert [article.title for article in articles] == ["Прва", "Втора"]
