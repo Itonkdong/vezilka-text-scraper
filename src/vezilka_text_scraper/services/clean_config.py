@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from vezilka_text_scraper.shared.constants import (
+    DEFAULT_CLEAN_BATCH_SIZE,
     DEFAULT_CLEAN_INPUT_PATH,
     DEFAULT_CLEAN_OUTPUT_RUN_NAME,
     DEFAULT_CONTINUE_ON_ERROR,
@@ -20,6 +21,7 @@ class CleanConfig(BaseModel):
 
     input_path: Path | None = DEFAULT_CLEAN_INPUT_PATH
     output_run_name: str | None = DEFAULT_CLEAN_OUTPUT_RUN_NAME
+    batch_size: int = Field(default=DEFAULT_CLEAN_BATCH_SIZE, ge=1)
 
     min_word_count: int = Field(default=DEFAULT_MIN_WORD_COUNT, ge=0)
     min_section_word_count: int = Field(default=DEFAULT_MIN_SECTION_WORD_COUNT, ge=0)

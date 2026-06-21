@@ -56,6 +56,9 @@ Path to a cleaned processed JSONL file. When `null`, the newest `data/processed/
 `article_limit`
 Optional number of records to persist from the start of the processed file. When `null`, all records are persisted.
 
+`batch_size`
+Number of cleaned JSONL records to read and persist in one database transaction.
+
 `database.type`
 Database backend selected by YAML. Supported values are `sqlite`, `postgres`, and `postgresql`. `postgres` is normalized to `postgresql`.
 
@@ -102,7 +105,7 @@ Articles are upserted by Wikipedia `page_id`.
 
 When an existing article is updated, the job replaces that article's sections, Wikipedia category links, and source category links with the current cleaned JSONL record.
 
-The whole run uses one transaction. If any write fails, the job rolls back the full run and fails.
+The job reads and persists records in batches. Each batch uses its own transaction. If batch N fails, that batch rolls back and the job fails, but earlier successful batches remain committed.
 
 ## Final Job Log
 
@@ -128,6 +131,8 @@ Sections
 Wiki links
 Source links
 With init
+Batch size
+Batches
 Duration
 Reason, only on failure
 ```

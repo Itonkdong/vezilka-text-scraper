@@ -5,6 +5,7 @@ import pytest
 from vezilka_text_scraper.services.clean_config import CleanConfig
 from vezilka_text_scraper.services.configuration import ConfigurationService
 from vezilka_text_scraper.shared.constants import (
+    DEFAULT_CLEAN_BATCH_SIZE,
     DEFAULT_LOG_SKIPPED_ARTICLES,
     DEFAULT_MIN_SECTION_WORD_COUNT,
     DEFAULT_MIN_WORD_COUNT,
@@ -19,6 +20,7 @@ def test_load_full_clean_config(tmp_path: Path) -> None:
         """
 input_path: data/raw/sample.jsonl
 output_run_name: clean_test
+batch_size: 8
 min_word_count: 10
 min_section_word_count: 4
 skip_disambiguation_pages: false
@@ -40,6 +42,7 @@ normalize_whitespace: false
 
     assert config.input_path == Path("data/raw/sample.jsonl")
     assert config.output_run_name == "clean_test.jsonl"
+    assert config.batch_size == 8
     assert config.min_word_count == 10
     assert config.min_section_word_count == 4
     assert config.skip_disambiguation_pages is False
@@ -57,6 +60,7 @@ def test_load_partial_clean_config_uses_defaults(tmp_path: Path) -> None:
 
     assert config.input_path is None
     assert config.output_run_name is None
+    assert config.batch_size == DEFAULT_CLEAN_BATCH_SIZE
     assert config.min_word_count == DEFAULT_MIN_WORD_COUNT
     assert config.min_section_word_count == DEFAULT_MIN_SECTION_WORD_COUNT
     assert config.skip_disambiguation_pages is DEFAULT_SKIP_DISAMBIGUATION_PAGES
@@ -69,6 +73,7 @@ def test_load_partial_clean_config_uses_defaults(tmp_path: Path) -> None:
     [
         "min_word_count: -1\n",
         "min_section_word_count: -1\n",
+        "batch_size: 0\n",
         "output_run_name: nested/name\n",
         "unknown_field: true\n",
     ],

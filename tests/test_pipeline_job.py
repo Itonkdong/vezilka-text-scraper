@@ -60,6 +60,7 @@ categories:
 recursive: false
 request_delay_seconds: 0
 output_run_name: raw_pipeline
+batch_size: 99
 """,
         encoding="utf-8",
     )
@@ -67,6 +68,7 @@ output_run_name: raw_pipeline
     clean_config_path.write_text(
         """
 output_run_name: clean_pipeline
+batch_size: 99
 min_word_count: 0
 min_section_word_count: 0
 log_skipped_articles: false
@@ -78,6 +80,7 @@ log_skipped_articles: false
         """
 database:
   type: sqlite
+batch_size: 99
 """,
         encoding="utf-8",
     )
@@ -153,6 +156,7 @@ def test_pipeline_saves_raw_and_cleaned_files_and_displays_from_file(
 save_scraped_articles: true
 save_cleaned_articles: true
 persist_to_database: false
+batch_size: 1
 run_display: true
 display_source: file
 """,
@@ -165,6 +169,8 @@ display_source: file
     assert result.raw_saved_count == 2
     assert result.cleaned_count == 2
     assert result.clean_saved_count == 2
+    assert result.batch_size == 1
+    assert result.batch_count == 2
     assert result.displayed_count == 1
     assert result.raw_output_path.exists()
     assert result.clean_output_path.exists()
@@ -181,6 +187,7 @@ def test_pipeline_can_skip_raw_file_output(tmp_path: Path) -> None:
 save_scraped_articles: false
 save_cleaned_articles: true
 persist_to_database: false
+batch_size: 1
 run_display: false
 display_source: file
 """,
@@ -191,6 +198,7 @@ display_source: file
     assert result.raw_saved_count == 0
     assert result.raw_output_path == Path("-")
     assert result.clean_saved_count == 2
+    assert result.batch_count == 2
     assert result.clean_output_path.exists()
 
 
@@ -217,6 +225,7 @@ article_limit: 1
 save_scraped_articles: false
 save_cleaned_articles: false
 persist_to_database: true
+batch_size: 1
 run_display: true
 display_source: database
 """,
@@ -227,6 +236,7 @@ display_source: database
 
     assert result.clean_saved_count == 0
     assert result.persist_inserted_count == 2
+    assert result.batch_count == 2
     assert result.displayed_count == 1
     assert "Прва" in captured.out
     with create_engine(f"sqlite:///{database_path}", future=True).connect() as connection:

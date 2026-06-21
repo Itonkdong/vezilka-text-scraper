@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -60,6 +61,39 @@ class RawArticleJsonlReader:
 
         return articles
 
+    def iter_article_batches(
+        self,
+        input_path: Path,
+        batch_size: int,
+    ) -> Iterator[list[RawArticleInput]]:
+        """Yield raw article records from a JSONL file in batches.
+
+        Raises:
+            AdapterError: If the file cannot be read or records are invalid.
+        """
+        batch: list[RawArticleInput] = []
+        try:
+            with input_path.open(encoding="utf-8") as input_file:
+                for line_number, line in enumerate(input_file, start=1):
+                    stripped_line = line.strip()
+                    if not stripped_line:
+                        continue
+                    try:
+                        payload = json.loads(stripped_line)
+                        batch.append(RawArticleInput(**payload))
+                    except (json.JSONDecodeError, ValidationError) as error:
+                        raise AdapterError(
+                            f"Invalid raw article record at {input_path}:{line_number}"
+                        ) from error
+                    if len(batch) >= batch_size:
+                        yield batch
+                        batch = []
+        except OSError as error:
+            raise AdapterError(f"Could not read raw JSONL file: {input_path}") from error
+
+        if batch:
+            yield batch
+
 
 class CleanedArticleJsonlWriter:
     """Write cleaned article records to processed JSONL files."""
@@ -81,6 +115,31 @@ class CleanedArticleJsonlWriter:
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with output_path.open("w", encoding="utf-8") as output_file:
+                for article in articles:
+                    output_file.write(
+                        json.dumps(article.model_dump(), ensure_ascii=False, sort_keys=True)
+                    )
+                    output_file.write("\n")
+        except OSError as error:
+            raise AdapterError(f"Could not write processed JSONL file: {output_path}") from error
+
+        return len(articles)
+
+    def write_article_batch(
+        self,
+        articles: list[CleanedArticle],
+        output_path: Path,
+        append: bool,
+    ) -> int:
+        """Write or append a batch of cleaned article records to a JSONL file.
+
+        Raises:
+            AdapterError: If the output file cannot be written.
+        """
+        mode = "a" if append else "w"
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with output_path.open(mode, encoding="utf-8") as output_file:
                 for article in articles:
                     output_file.write(
                         json.dumps(article.model_dump(), ensure_ascii=False, sort_keys=True)
@@ -147,3 +206,41 @@ class CleanedArticleJsonlReader:
             raise AdapterError(f"Could not read processed JSONL file: {input_path}") from error
 
         return articles
+
+    def iter_article_batches(
+        self,
+        input_path: Path,
+        batch_size: int,
+        article_limit: int | None,
+    ) -> Iterator[list[CleanedArticle]]:
+        """Yield cleaned article records from a JSONL file in batches.
+
+        Raises:
+            AdapterError: If the file cannot be read or records are invalid.
+        """
+        batch: list[CleanedArticle] = []
+        read_count = 0
+        try:
+            with input_path.open(encoding="utf-8") as input_file:
+                for line_number, line in enumerate(input_file, start=1):
+                    if article_limit is not None and read_count >= article_limit:
+                        break
+                    stripped_line = line.strip()
+                    if not stripped_line:
+                        continue
+                    try:
+                        payload = json.loads(stripped_line)
+                        batch.append(CleanedArticle(**payload))
+                        read_count += 1
+                    except (json.JSONDecodeError, ValidationError) as error:
+                        raise AdapterError(
+                            f"Invalid cleaned article record at {input_path}:{line_number}"
+                        ) from error
+                    if len(batch) >= batch_size:
+                        yield batch
+                        batch = []
+        except OSError as error:
+            raise AdapterError(f"Could not read processed JSONL file: {input_path}") from error
+
+        if batch:
+            yield batch

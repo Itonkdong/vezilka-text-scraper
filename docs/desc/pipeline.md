@@ -10,7 +10,7 @@ scrape -> clean -> optional persist -> optional display
 
 The pipeline owns only orchestration flags. Each step still loads its own job config for step-specific behavior.
 
-The job can keep scraped and cleaned articles in memory so raw and processed JSONL files are optional outputs. This lets a run persist directly to the database, write files for inspection, or do both.
+The job streams records in batches so large runs do not need to keep the full raw and cleaned corpus in memory. Raw and processed JSONL files are optional outputs. This lets a run persist directly to the database, write files for inspection, or do both.
 
 ## How To Run
 
@@ -68,6 +68,9 @@ When `true`, writes cleaned articles to `data/processed`. When `false`, cleaned 
 `persist_to_database`
 When `true`, initializes the configured database schema if needed and persists the current run's cleaned articles.
 
+`batch_size`
+Number of articles processed through one pipeline batch. Pipeline `batch_size` overrides the scrape, clean, and persist batch sizes during pipeline runs.
+
 `run_display`
 When `true`, prints formatted cleaned article text at the end of the run.
 
@@ -93,9 +96,13 @@ formatted console display output
 
 When output run names are configured in the step configs, those names are used for the JSONL file names.
 
+JSONL outputs are written incrementally by batch. If the pipeline fails mid-run, output files may contain successfully completed batches.
+
 ## Database Behavior
 
 When `persist_to_database` is enabled, the pipeline initializes the database schema before persistence. If the schema and tables already exist, initialization skips existing objects and continues.
+
+Persistence happens once per pipeline batch. If a later batch fails, earlier successful batches remain committed.
 
 The database backend is selected in `configs/persist.yaml`; actual connection values are loaded from `.env`.
 
@@ -115,6 +122,7 @@ Status
 Config
 Step configs
 Pipeline flags
+Batch size and batch count
 Output paths
 Raw discovered, fetched, saved, and failed counts
 Cleaned, saved, skipped, and failed counts

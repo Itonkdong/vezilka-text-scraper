@@ -8,6 +8,7 @@ from vezilka_text_scraper.shared.constants import (
     DEFAULT_CATEGORY_MAX_DEPTH,
     DEFAULT_CONTINUE_ON_ERROR,
     DEFAULT_RECURSIVE_CATEGORY_CRAWL,
+    DEFAULT_SCRAPE_BATCH_SIZE,
 )
 from vezilka_text_scraper.shared.exceptions import ServiceError
 
@@ -26,6 +27,7 @@ include_redirects: true
 namespace: 0
 request_delay_seconds: 0
 continue_on_error: false
+batch_size: 7
 output_run_name: sample_run
 """,
         encoding="utf-8",
@@ -40,6 +42,7 @@ output_run_name: sample_run
     assert config.per_category_article_limit == 3
     assert config.include_redirects is True
     assert config.continue_on_error is False
+    assert config.batch_size == 7
     assert config.output_run_name == "sample_run.jsonl"
 
 
@@ -53,6 +56,7 @@ def test_load_partial_scrape_config_uses_defaults(tmp_path: Path) -> None:
     assert config.recursive is DEFAULT_RECURSIVE_CATEGORY_CRAWL
     assert config.max_depth == DEFAULT_CATEGORY_MAX_DEPTH
     assert config.continue_on_error is DEFAULT_CONTINUE_ON_ERROR
+    assert config.batch_size == DEFAULT_SCRAPE_BATCH_SIZE
 
 
 @pytest.mark.parametrize(
@@ -63,6 +67,7 @@ def test_load_partial_scrape_config_uses_defaults(tmp_path: Path) -> None:
         "categories:\n  - Географија\nmax_depth: -1\n",
         "categories:\n  - Географија\ntotal_article_limit: 0\n",
         "categories:\n  - Географија\nrequest_delay_seconds: -0.1\n",
+        "categories:\n  - Географија\nbatch_size: 0\n",
         "categories:\n  - Географија\noutput_run_name: nested/name\n",
     ],
 )

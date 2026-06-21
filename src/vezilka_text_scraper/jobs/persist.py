@@ -34,6 +34,8 @@ class PersistJobResult(BaseModel):
     wiki_category_link_count: int = Field(ge=0)
     source_category_link_count: int = Field(ge=0)
     initialized_database: bool = False
+    batch_size: int = Field(ge=0)
+    batch_count: int = Field(ge=0)
     duration_seconds: float
 
 
@@ -62,9 +64,17 @@ class WikipediaPersistJob:
         database_type = "-"
         database_url = "-"
         read_count = 0
+        inserted_count = 0
+        updated_count = 0
+        section_count = 0
+        wiki_category_link_count = 0
+        source_category_link_count = 0
+        batch_count = 0
+        batch_size = 0
 
         try:
             config = self._configuration_service.load(resolved_config_path, PersistConfig)
+            batch_size = config.batch_size
             database_type = config.database.type
             database_adapter = ArticleDatabaseAdapter(config.database)
             database_url = database_adapter.mask_database_url()
@@ -73,25 +83,38 @@ class WikipediaPersistJob:
                 database_adapter.initialize_schema()
 
             input_path = self._reader.resolve_input_path(config.input_path)
-            articles = self._reader.read_articles(input_path, config.article_limit)
-            read_count = len(articles)
-
             LOGGER.info(f"Starting Wikipedia persist job from {input_path}")
-            LOGGER.info(f"Loaded {read_count} cleaned articles")
+            for articles in self._reader.iter_article_batches(
+                input_path,
+                config.batch_size,
+                config.article_limit,
+            ):
+                batch_count += 1
+                read_count += len(articles)
+                LOGGER.info(f"Persisting cleaned batch of {len(articles)} articles")
+                persisted = database_adapter.persist_articles(articles)
+                inserted_count += persisted.inserted_count
+                updated_count += persisted.updated_count
+                section_count += persisted.section_count
+                wiki_category_link_count += persisted.wiki_category_link_count
+                source_category_link_count += persisted.source_category_link_count
+            if batch_count == 0:
+                database_adapter.validate_ready()
 
-            persisted = database_adapter.persist_articles(articles)
             result = PersistJobResult(
                 input_path=input_path,
                 config_path=resolved_config_path,
                 database_type=database_type,
                 database_url=database_url,
                 read_count=read_count,
-                inserted_count=persisted.inserted_count,
-                updated_count=persisted.updated_count,
-                section_count=persisted.section_count,
-                wiki_category_link_count=persisted.wiki_category_link_count,
-                source_category_link_count=persisted.source_category_link_count,
+                inserted_count=inserted_count,
+                updated_count=updated_count,
+                section_count=section_count,
+                wiki_category_link_count=wiki_category_link_count,
+                source_category_link_count=source_category_link_count,
                 initialized_database=with_init,
+                batch_size=batch_size,
+                batch_count=batch_count,
                 duration_seconds=perf_counter() - started_at,
             )
             LOGGER.info(
@@ -108,12 +131,14 @@ class WikipediaPersistJob:
                 database_type=database_type,
                 database_url=database_url,
                 read_count=read_count,
-                inserted_count=0,
-                updated_count=0,
-                section_count=0,
-                wiki_category_link_count=0,
-                source_category_link_count=0,
+                inserted_count=inserted_count,
+                updated_count=updated_count,
+                section_count=section_count,
+                wiki_category_link_count=wiki_category_link_count,
+                source_category_link_count=source_category_link_count,
                 initialized_database=with_init,
+                batch_size=batch_size,
+                batch_count=batch_count,
                 duration_seconds=perf_counter() - started_at,
             )
             LOGGER.error(
@@ -148,6 +173,8 @@ class WikipediaPersistJob:
             "Wiki links": result.wiki_category_link_count,
             "Source links": result.source_category_link_count,
             "With init": result.initialized_database,
+            "Batch size": result.batch_size,
+            "Batches": result.batch_count,
             "Duration": f"{result.duration_seconds:.2f}s",
         }
         if error is not None:

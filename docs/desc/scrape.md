@@ -73,6 +73,9 @@ Delay between category-member requests. This keeps live API runs more polite and
 `continue_on_error`
 Whether to skip failed categories/articles and continue the run. If false, the job fails on the first expected adapter error.
 
+`batch_size`
+Number of fetched raw articles to hold in memory before writing the next JSONL batch.
+
 `output_run_name`
 Optional JSONL file name for the run. If omitted, the job writes `wiki_raw_<timestamp>.jsonl`.
 
@@ -89,6 +92,8 @@ Output format:
 ```text
 JSONL, one raw article record per line
 ```
+
+The file is written incrementally by batch. If the job fails mid-run, the file may contain successfully completed batches.
 
 Example output path:
 
@@ -146,6 +151,8 @@ Output
 Discovered
 Saved
 Failed
+Batch size
+Batches
 Duration
 Reason, only on failure
 ```

@@ -121,6 +121,7 @@ def test_persist_job_reads_newest_processed_file_and_persists_counts(
     config_path.write_text(
         """
 article_limit: 1
+batch_size: 1
 database:
   type: sqlite
 """,
@@ -140,6 +141,8 @@ database:
     assert result.section_count == 1
     assert result.wiki_category_link_count == 1
     assert result.source_category_link_count == 1
+    assert result.batch_size == 1
+    assert result.batch_count == 1
     with engine.connect() as connection:
         assert connection.execute(text("SELECT title FROM articles")).scalar_one() == "Прво"
 

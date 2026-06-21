@@ -8,11 +8,12 @@ categories:
 recursive: true
 max_depth: 2
 
-total_article_limit: 10
+total_article_limit: 100
 per_category_article_limit: null
 
 include_redirects: false
 namespace: 0
 request_delay_seconds: 0.2
 continue_on_error: true
+batch_size: 32
 output_run_name: null

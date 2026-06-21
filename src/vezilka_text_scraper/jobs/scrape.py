@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -32,11 +33,23 @@ class ScrapeJobResult(BaseModel):
     discovered_count: int
     saved_count: int
     failed_count: int
+    batch_size: int
+    batch_count: int
     duration_seconds: float
 
 
 class ScrapeCollectionResult(BaseModel):
     """Raw articles collected from MediaWiki before optional storage."""
+
+    model_config = ConfigDict(frozen=True)
+
+    raw_articles: list[RawArticle]
+    discovered_count: int
+    failed_count: int
+
+
+class ScrapeBatchResult(BaseModel):
+    """A fetched raw article batch with batch-local counters."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -74,21 +87,32 @@ class WikipediaScrapeJob:
         discovered_count = 0
         saved_count = 0
         failed_count = 0
+        batch_count = 0
+        batch_size = 0
 
         try:
             config = self._configuration_service.load(resolved_config_path, ScrapeConfig)
+            batch_size = config.batch_size
             output_path = self._storage_adapter.build_output_path(config.output_run_name)
-            collected = self.collect_raw_articles(config)
-            discovered_count = collected.discovered_count
-            failed_count = collected.failed_count
-
-            try:
-                saved_count = self._storage_adapter.write_articles(
-                    collected.raw_articles,
-                    output_path,
-                )
-            except AdapterError as error:
-                raise JobError("Could not save raw Wikipedia scrape output") from error
+            append = False
+            for batch in self.iter_raw_article_batches(config, config.batch_size):
+                batch_count += 1
+                discovered_count += batch.discovered_count
+                failed_count += batch.failed_count
+                try:
+                    saved_count += self._storage_adapter.write_article_batch(
+                        batch.raw_articles,
+                        output_path,
+                        append=append,
+                    )
+                    append = True
+                except AdapterError as error:
+                    raise JobError("Could not save raw Wikipedia scrape output") from error
+            if batch_count == 0:
+                try:
+                    self._storage_adapter.write_article_batch([], output_path, append=False)
+                except AdapterError as error:
+                    raise JobError("Could not save raw Wikipedia scrape output") from error
 
             duration_seconds = perf_counter() - started_at
             result = ScrapeJobResult(
@@ -97,6 +121,8 @@ class WikipediaScrapeJob:
                 discovered_count=discovered_count,
                 saved_count=saved_count,
                 failed_count=failed_count,
+                batch_size=batch_size,
+                batch_count=batch_count,
                 duration_seconds=duration_seconds,
             )
             LOGGER.info(
@@ -118,6 +144,8 @@ class WikipediaScrapeJob:
                             discovered_count=discovered_count,
                             saved_count=saved_count,
                             failed_count=failed_count,
+                            batch_size=batch_size,
+                            batch_count=batch_count,
                             duration_seconds=duration_seconds,
                         ),
                         error=error,
@@ -129,16 +157,35 @@ class WikipediaScrapeJob:
 
     def collect_raw_articles(self, config: ScrapeConfig) -> ScrapeCollectionResult:
         """Discover and fetch raw articles without writing them."""
+        raw_articles: list[RawArticle] = []
+        discovered_count = 0
+        failed_count = 0
+        for batch in self.iter_raw_article_batches(config, config.batch_size):
+            raw_articles.extend(batch.raw_articles)
+            discovered_count += batch.discovered_count
+            failed_count += batch.failed_count
+        return ScrapeCollectionResult(
+            raw_articles=raw_articles,
+            discovered_count=discovered_count,
+            failed_count=failed_count,
+        )
+
+    def iter_raw_article_batches(
+        self,
+        config: ScrapeConfig,
+        batch_size: int,
+    ) -> Iterator[ScrapeBatchResult]:
+        """Discover and fetch raw articles in batches without writing them."""
         scraped_at = datetime.now(UTC).isoformat()
 
         LOGGER.info(f"Starting raw Wikipedia scrape from {len(config.categories)} categories")
-        discovered_articles = self._discovery_service.discover(config)
-        discovered_count = len(discovered_articles)
+        raw_articles_batch: list[RawArticle] = []
+        discovered_count = 0
         failed_count = 0
-        LOGGER.info(f"Discovered {discovered_count} unique articles")
-
-        raw_articles: list[RawArticle] = []
+        discovered_articles = self._discovery_service.discover(config)
+        LOGGER.info(f"Discovered {len(discovered_articles)} unique articles")
         for discovered_article in discovered_articles:
+            discovered_count += 1
             try:
                 raw_article = self._mediawiki_adapter.fetch_raw_article(
                     page_id=discovered_article.page_id,
@@ -161,13 +208,26 @@ class WikipediaScrapeJob:
                 ) from error
 
             if raw_article is not None:
-                raw_articles.append(raw_article)
+                raw_articles_batch.append(raw_article)
 
-        return ScrapeCollectionResult(
-            raw_articles=raw_articles,
-            discovered_count=discovered_count,
-            failed_count=failed_count,
-        )
+            if len(raw_articles_batch) >= batch_size:
+                LOGGER.info(f"Fetched raw batch of {len(raw_articles_batch)} articles")
+                yield ScrapeBatchResult(
+                    raw_articles=raw_articles_batch,
+                    discovered_count=discovered_count,
+                    failed_count=failed_count,
+                )
+                raw_articles_batch = []
+                discovered_count = 0
+                failed_count = 0
+
+        if raw_articles_batch or discovered_count or failed_count:
+            LOGGER.info(f"Fetched raw batch of {len(raw_articles_batch)} articles")
+            yield ScrapeBatchResult(
+                raw_articles=raw_articles_batch,
+                discovered_count=discovered_count,
+                failed_count=failed_count,
+            )
 
     def _format_final_summary(
         self,
@@ -183,6 +243,8 @@ class WikipediaScrapeJob:
             "Discovered": result.discovered_count,
             "Saved": result.saved_count,
             "Failed": result.failed_count,
+            "Batch size": result.batch_size,
+            "Batches": result.batch_count,
             "Duration": f"{result.duration_seconds:.2f}s",
         }
         if error is not None:

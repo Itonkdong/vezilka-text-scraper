@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from collections.abc import Iterator
 from time import sleep
 from typing import Protocol
 
@@ -111,6 +112,70 @@ class ArticleDiscoveryService:
             for page_id, source_categories in source_categories_by_page_id.items()
         ]
 
+    def iter_discovered_articles(self, config: ScrapeConfig) -> Iterator[DiscoveredArticle]:
+        """Yield unique articles as they are discovered from configured categories.
+
+        This streaming path tracks visited categories and page ids, but a duplicate page
+        reached later from another root category is skipped because the article may have
+        already been fetched and written.
+        """
+        seen_page_ids: set[int] = set()
+
+        for root_category in config.categories:
+            per_category_count = 0
+            visited_categories: set[str] = set()
+            pending_categories: deque[tuple[str, int]] = deque([(root_category, 0)])
+
+            while pending_categories and not self._global_limit_reached_for_seen(
+                seen_page_ids,
+                self._effective_total_article_limit(config),
+            ):
+                category, depth = pending_categories.popleft()
+                normalized_category = self._normalize_category_name(category)
+                if normalized_category in visited_categories:
+                    continue
+                visited_categories.add(normalized_category)
+
+                try:
+                    members = self._mediawiki_adapter.list_category_members(
+                        normalized_category,
+                        namespace=config.namespace,
+                    )
+                except AdapterError as error:
+                    if config.continue_on_error:
+                        LOGGER.warning(f"Skipping category '{normalized_category}': {error}")
+                        continue
+                    raise ServiceError(f"Could not list category: {normalized_category}") from error
+
+                for member in members:
+                    if member.is_category:
+                        self._queue_subcategory(member, depth, config, pending_categories)
+                        continue
+
+                    if (
+                        config.per_category_article_limit is not None
+                        and per_category_count >= config.per_category_article_limit
+                    ):
+                        continue
+                    if self._global_limit_reached_for_seen(
+                        seen_page_ids,
+                        self._effective_total_article_limit(config),
+                    ):
+                        break
+                    if member.page_id in seen_page_ids:
+                        continue
+
+                    seen_page_ids.add(member.page_id)
+                    per_category_count += 1
+                    yield DiscoveredArticle(
+                        page_id=member.page_id,
+                        title=member.title,
+                        source_categories=[root_category],
+                    )
+
+                if config.request_delay_seconds > 0:
+                    sleep(config.request_delay_seconds)
+
     def _queue_subcategory(
         self,
         member: CategoryMember,
@@ -133,6 +198,15 @@ class ArticleDiscoveryService:
         if total_article_limit is None:
             return False
         return len(title_by_page_id) >= total_article_limit
+
+    def _global_limit_reached_for_seen(
+        self,
+        seen_page_ids: set[int],
+        total_article_limit: int | None,
+    ) -> bool:
+        if total_article_limit is None:
+            return False
+        return len(seen_page_ids) >= total_article_limit
 
     def _effective_total_article_limit(self, config: ScrapeConfig) -> int | None:
         if config.per_category_article_limit is not None:

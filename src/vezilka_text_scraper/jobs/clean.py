@@ -36,6 +36,8 @@ class CleanJobResult(BaseModel):
     cleaned_count: int
     skipped_count: int
     failed_count: int
+    batch_size: int
+    batch_count: int
     duration_seconds: float
 
 
@@ -82,26 +84,40 @@ class WikipediaCleanJob:
         cleaned_count = 0
         skipped_count = 0
         failed_count = 0
+        batch_count = 0
+        batch_size = 0
 
         try:
             config = self._configuration_service.load(resolved_config_path, CleanConfig)
+            batch_size = config.batch_size
             input_path = self._raw_reader.resolve_input_path(config.input_path)
             output_path = self._cleaned_writer.build_output_path(config.output_run_name)
-            raw_articles = self._raw_reader.read_articles(input_path)
             LOGGER.info(f"Starting Wikipedia clean job from {input_path}")
-            collected = self.clean_raw_articles(raw_articles, config)
-            read_count = collected.read_count
-            cleaned_count = collected.cleaned_count
-            skipped_count = collected.skipped_count
-            failed_count = collected.failed_count
-
-            try:
-                cleaned_count = self._cleaned_writer.write_articles(
-                    collected.cleaned_articles,
-                    output_path,
-                )
-            except AdapterError as error:
-                raise JobError("Could not save cleaned Wikipedia output") from error
+            append = False
+            for raw_batch in self._raw_reader.iter_article_batches(
+                input_path,
+                config.batch_size,
+            ):
+                batch_count += 1
+                collected = self.clean_raw_articles(raw_batch, config)
+                read_count += collected.read_count
+                cleaned_count += collected.cleaned_count
+                skipped_count += collected.skipped_count
+                failed_count += collected.failed_count
+                try:
+                    self._cleaned_writer.write_article_batch(
+                        collected.cleaned_articles,
+                        output_path,
+                        append=append,
+                    )
+                    append = True
+                except AdapterError as error:
+                    raise JobError("Could not save cleaned Wikipedia output") from error
+            if batch_count == 0:
+                try:
+                    self._cleaned_writer.write_article_batch([], output_path, append=False)
+                except AdapterError as error:
+                    raise JobError("Could not save cleaned Wikipedia output") from error
 
             duration_seconds = perf_counter() - started_at
             result = CleanJobResult(
@@ -112,6 +128,8 @@ class WikipediaCleanJob:
                 cleaned_count=cleaned_count,
                 skipped_count=skipped_count,
                 failed_count=failed_count,
+                batch_size=batch_size,
+                batch_count=batch_count,
                 duration_seconds=duration_seconds,
             )
             LOGGER.info(
@@ -135,6 +153,8 @@ class WikipediaCleanJob:
                             cleaned_count=cleaned_count,
                             skipped_count=skipped_count,
                             failed_count=failed_count,
+                            batch_size=batch_size,
+                            batch_count=batch_count,
                             duration_seconds=duration_seconds,
                         ),
                         error=error,
@@ -213,6 +233,8 @@ class WikipediaCleanJob:
             "Cleaned": result.cleaned_count,
             "Skipped": result.skipped_count,
             "Failed": result.failed_count,
+            "Batch size": result.batch_size,
+            "Batches": result.batch_count,
             "Duration": f"{result.duration_seconds:.2f}s",
         }
         if error is not None:

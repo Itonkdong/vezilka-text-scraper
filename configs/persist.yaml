@@ -1,5 +1,6 @@
 input_path: null
 article_limit: null
+batch_size: 32
 
 database:
   type: postgresql

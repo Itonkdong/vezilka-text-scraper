@@ -11,6 +11,7 @@ from vezilka_text_scraper.shared.constants import (
     DEFAULT_PER_CATEGORY_ARTICLE_LIMIT,
     DEFAULT_RECURSIVE_CATEGORY_CRAWL,
     DEFAULT_REQUEST_DELAY_SECONDS,
+    DEFAULT_SCRAPE_BATCH_SIZE,
     DEFAULT_TOTAL_ARTICLE_LIMIT,
     DEFAULT_WIKIPEDIA_NAMESPACE,
     SUITABLE_WIKIPEDIA_CATEGORIES,
@@ -32,6 +33,7 @@ class ScrapeConfig(BaseModel):
     namespace: int = Field(default=DEFAULT_WIKIPEDIA_NAMESPACE, ge=0)
     request_delay_seconds: float = Field(default=DEFAULT_REQUEST_DELAY_SECONDS, ge=0)
     continue_on_error: bool = DEFAULT_CONTINUE_ON_ERROR
+    batch_size: int = Field(default=DEFAULT_SCRAPE_BATCH_SIZE, ge=1)
     output_run_name: str | None = None
 
     model_config = ConfigDict(extra="forbid")

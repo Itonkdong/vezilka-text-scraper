@@ -3,13 +3,14 @@
 from pathlib import Path
 from typing import Literal, cast
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from vezilka_text_scraper.shared.constants import (
     DEFAULT_CLEAN_CONFIG_PATH,
     DEFAULT_DISPLAY_CONFIG_PATH,
     DEFAULT_DISPLAY_SOURCE,
     DEFAULT_PERSIST_CONFIG_PATH,
+    DEFAULT_PIPELINE_BATCH_SIZE,
     DEFAULT_SCRAPE_CONFIG_PATH,
 )
 
@@ -27,6 +28,7 @@ class PipelineConfig(BaseModel):
     save_scraped_articles: bool = True
     save_cleaned_articles: bool = True
     persist_to_database: bool = False
+    batch_size: int = Field(default=DEFAULT_PIPELINE_BATCH_SIZE, ge=1)
 
     run_display: bool = True
     display_source: PipelineDisplaySource = cast(PipelineDisplaySource, DEFAULT_DISPLAY_SOURCE)

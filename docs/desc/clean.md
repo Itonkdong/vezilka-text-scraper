@@ -47,6 +47,9 @@ Path to a raw scraper JSONL file. When `null`, the newest `data/raw/*.jsonl` fil
 `output_run_name`
 Optional JSONL file name for the processed output. If omitted, the job writes `wiki_clean_<timestamp>.jsonl`.
 
+`batch_size`
+Number of raw JSONL records to read, clean, and write at a time.
+
 `min_word_count`
 Minimum number of words required in the final cleaned text. Articles below this count are skipped.
 
@@ -99,6 +102,8 @@ Output format:
 ```text
 JSONL, one cleaned article record per line
 ```
+
+The file is written incrementally by batch. If the job fails mid-run, the file may contain successfully completed batches.
 
 Example output path:
 
@@ -173,6 +178,8 @@ Read
 Cleaned
 Skipped
 Failed
+Batch size
+Batches
 Duration
 Reason, only on failure
 ```

@@ -4,8 +4,9 @@ persist_config_path: configs/persist.yaml
 display_config_path: configs/display.yaml
 
 save_scraped_articles: false
-save_cleaned_articles: false
+save_cleaned_articles: true
 persist_to_database: true
+batch_size: 32
 
 run_display: true
 display_source: database

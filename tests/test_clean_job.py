@@ -70,6 +70,7 @@ def test_clean_job_writes_processed_jsonl_and_applies_filters(tmp_path: Path) ->
         f"""
 input_path: {input_path}
 output_run_name: clean_test
+batch_size: 1
 min_word_count: 5
 skip_disambiguation_pages: true
 continue_on_error: true
@@ -89,6 +90,8 @@ continue_on_error: true
     assert result.cleaned_count == 1
     assert result.skipped_count == 1
     assert result.failed_count == 0
+    assert result.batch_size == 1
+    assert result.batch_count == 2
     records = [
         json.loads(line)
         for line in result.output_path.read_text(encoding="utf-8").splitlines()

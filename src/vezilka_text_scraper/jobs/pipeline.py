@@ -13,7 +13,7 @@ from vezilka_text_scraper.adapters.database import ArticleDatabaseAdapter
 from vezilka_text_scraper.adapters.raw_storage import RawArticleJsonlStorageAdapter
 from vezilka_text_scraper.jobs.clean import WikipediaCleanJob, build_wikipedia_clean_job
 from vezilka_text_scraper.jobs.scrape import WikipediaScrapeJob, build_wikipedia_scrape_job
-from vezilka_text_scraper.models.article import RawArticleInput
+from vezilka_text_scraper.models.article import CleanedArticle, RawArticleInput
 from vezilka_text_scraper.services.article_display import ArticleDisplayService
 from vezilka_text_scraper.services.clean_config import CleanConfig
 from vezilka_text_scraper.services.configuration import ConfigurationService
@@ -43,6 +43,8 @@ class PipelineJobResult(BaseModel):
     save_scraped_articles: bool
     save_cleaned_articles: bool
     persist_to_database: bool
+    batch_size: int
+    batch_count: int = Field(default=0, ge=0)
     run_display: bool
     display_source: PipelineDisplaySource
     raw_discovered_count: int = Field(default=0, ge=0)
@@ -97,38 +99,31 @@ class WikipediaPipelineJob:
                 config.clean_config_path,
                 CleanConfig,
             )
+            display_config = None
+            if config.run_display:
+                display_config = self._configuration_service.load(
+                    config.display_config_path,
+                    DisplayConfig,
+                )
 
             LOGGER.info("Starting full Wikipedia corpus pipeline")
-            raw_collection = self._scrape_job.collect_raw_articles(scrape_config)
             raw_output_path = Path("-")
             raw_saved_count = 0
             if config.save_scraped_articles:
                 raw_output_path = self._raw_storage.build_output_path(
                     scrape_config.output_run_name
                 )
-                raw_saved_count = self._raw_storage.write_articles(
-                    raw_collection.raw_articles,
-                    raw_output_path,
-                )
 
-            raw_inputs = [
-                RawArticleInput(**raw_article.model_dump())
-                for raw_article in raw_collection.raw_articles
-            ]
-            clean_collection = self._clean_job.clean_raw_articles(raw_inputs, clean_config)
             clean_output_path = Path("-")
             clean_saved_count = 0
             if config.save_cleaned_articles:
                 clean_output_path = self._cleaned_writer.build_output_path(
                     clean_config.output_run_name
                 )
-                clean_saved_count = self._cleaned_writer.write_articles(
-                    clean_collection.cleaned_articles,
-                    clean_output_path,
-                )
 
             persist_inserted_count = 0
             persist_updated_count = 0
+            database_adapter: ArticleDatabaseAdapter | None = None
             if config.persist_to_database:
                 persist_config = self._configuration_service.load(
                     config.persist_config_path,
@@ -136,31 +131,124 @@ class WikipediaPipelineJob:
                 )
                 database_adapter = ArticleDatabaseAdapter(persist_config.database)
                 database_adapter.initialize_schema()
-                persisted = database_adapter.persist_articles(clean_collection.cleaned_articles)
-                persist_inserted_count = persisted.inserted_count
-                persist_updated_count = persisted.updated_count
+
+            raw_discovered_count = 0
+            raw_failed_count = 0
+            clean_read_count = 0
+            cleaned_count = 0
+            clean_skipped_count = 0
+            clean_failed_count = 0
+            batch_count = 0
+            display_articles: list[CleanedArticle] = []
+            display_page_ids: list[int] = []
+            display_limit = display_config.article_limit if display_config is not None else 0
+            raw_file_started = False
+            clean_file_started = False
+            result = result.model_copy(
+                update={
+                    "scrape_config_path": config.scrape_config_path,
+                    "clean_config_path": config.clean_config_path,
+                    "persist_config_path": config.persist_config_path,
+                    "display_config_path": config.display_config_path,
+                    "raw_output_path": raw_output_path,
+                    "clean_output_path": clean_output_path,
+                    "save_scraped_articles": config.save_scraped_articles,
+                    "save_cleaned_articles": config.save_cleaned_articles,
+                    "persist_to_database": config.persist_to_database,
+                    "batch_size": config.batch_size,
+                    "run_display": config.run_display,
+                    "display_source": config.display_source,
+                }
+            )
+
+            for raw_batch in self._scrape_job.iter_raw_article_batches(
+                scrape_config,
+                config.batch_size,
+            ):
+                batch_count += 1
+                raw_discovered_count += raw_batch.discovered_count
+                raw_failed_count += raw_batch.failed_count
+                if config.save_scraped_articles:
+                    raw_saved_count += self._raw_storage.write_article_batch(
+                        raw_batch.raw_articles,
+                        raw_output_path,
+                        append=raw_file_started,
+                    )
+                    raw_file_started = True
+
+                raw_inputs = [
+                    RawArticleInput(**raw_article.model_dump())
+                    for raw_article in raw_batch.raw_articles
+                ]
+                clean_collection = self._clean_job.clean_raw_articles(raw_inputs, clean_config)
+                clean_read_count += clean_collection.read_count
+                cleaned_count += clean_collection.cleaned_count
+                clean_skipped_count += clean_collection.skipped_count
+                clean_failed_count += clean_collection.failed_count
+
+                if config.save_cleaned_articles:
+                    clean_saved_count += self._cleaned_writer.write_article_batch(
+                        clean_collection.cleaned_articles,
+                        clean_output_path,
+                        append=clean_file_started,
+                    )
+                    clean_file_started = True
+
+                if database_adapter is not None:
+                    persisted = database_adapter.persist_articles(
+                        clean_collection.cleaned_articles
+                    )
+                    persist_inserted_count += persisted.inserted_count
+                    persist_updated_count += persisted.updated_count
+
+                if config.run_display:
+                    remaining_display_slots = display_limit - len(display_page_ids)
+                    if remaining_display_slots > 0:
+                        batch_display_articles = clean_collection.cleaned_articles[
+                            :remaining_display_slots
+                        ]
+                        display_articles.extend(batch_display_articles)
+                        display_page_ids.extend(
+                            article.page_id for article in batch_display_articles
+                        )
+
+                result = result.model_copy(
+                    update={
+                        "batch_count": batch_count,
+                        "raw_discovered_count": raw_discovered_count,
+                        "raw_fetched_count": clean_read_count,
+                        "raw_saved_count": raw_saved_count,
+                        "raw_failed_count": raw_failed_count,
+                        "clean_read_count": clean_read_count,
+                        "cleaned_count": cleaned_count,
+                        "clean_saved_count": clean_saved_count,
+                        "clean_skipped_count": clean_skipped_count,
+                        "clean_failed_count": clean_failed_count,
+                        "persist_inserted_count": persist_inserted_count,
+                        "persist_updated_count": persist_updated_count,
+                    }
+                )
+
+            if config.save_scraped_articles and not raw_file_started:
+                self._raw_storage.write_article_batch([], raw_output_path, append=False)
+            if config.save_cleaned_articles and not clean_file_started:
+                self._cleaned_writer.write_article_batch([], clean_output_path, append=False)
+
+            if database_adapter is not None and batch_count == 0:
+                database_adapter.validate_ready()
 
             displayed_count = 0
-            if config.run_display:
-                display_config = self._configuration_service.load(
-                    config.display_config_path,
-                    DisplayConfig,
-                )
-                display_articles = clean_collection.cleaned_articles[: display_config.article_limit]
-                if config.display_source == "database":
-                    persist_config = self._configuration_service.load(
-                        config.persist_config_path,
-                        PersistConfig,
-                    )
-                    database_adapter = ArticleDatabaseAdapter(persist_config.database)
-                    display_articles = database_adapter.read_articles_by_page_ids(
-                        [article.page_id for article in clean_collection.cleaned_articles],
+            if config.run_display and display_config is not None:
+                articles_to_display = display_articles
+                if config.display_source == "database" and database_adapter is not None:
+                    articles_to_display = database_adapter.read_articles_by_page_ids(
+                        display_page_ids,
                         display_config.article_limit,
                     )
-                formatted_output = self._display_service.format_articles(display_articles)
+                formatted_output = self._display_service.format_articles(articles_to_display)
                 if formatted_output:
                     print(formatted_output)
-                displayed_count = len(display_articles)
+                displayed_count = len(articles_to_display)
 
             result = PipelineJobResult(
                 config_path=resolved_config_path,
@@ -173,17 +261,19 @@ class WikipediaPipelineJob:
                 save_scraped_articles=config.save_scraped_articles,
                 save_cleaned_articles=config.save_cleaned_articles,
                 persist_to_database=config.persist_to_database,
+                batch_size=config.batch_size,
+                batch_count=batch_count,
                 run_display=config.run_display,
                 display_source=config.display_source,
-                raw_discovered_count=raw_collection.discovered_count,
-                raw_fetched_count=len(raw_collection.raw_articles),
+                raw_discovered_count=raw_discovered_count,
+                raw_fetched_count=clean_read_count,
                 raw_saved_count=raw_saved_count,
-                raw_failed_count=raw_collection.failed_count,
-                clean_read_count=clean_collection.read_count,
-                cleaned_count=clean_collection.cleaned_count,
+                raw_failed_count=raw_failed_count,
+                clean_read_count=clean_read_count,
+                cleaned_count=cleaned_count,
                 clean_saved_count=clean_saved_count,
-                clean_skipped_count=clean_collection.skipped_count,
-                clean_failed_count=clean_collection.failed_count,
+                clean_skipped_count=clean_skipped_count,
+                clean_failed_count=clean_failed_count,
                 persist_inserted_count=persist_inserted_count,
                 persist_updated_count=persist_updated_count,
                 displayed_count=displayed_count,
@@ -222,6 +312,7 @@ class WikipediaPipelineJob:
             save_scraped_articles=False,
             save_cleaned_articles=False,
             persist_to_database=False,
+            batch_size=0,
             run_display=False,
             display_source="file",
             duration_seconds=0,
@@ -244,6 +335,8 @@ class WikipediaPipelineJob:
             "Save raw": result.save_scraped_articles,
             "Save clean": result.save_cleaned_articles,
             "Persist": result.persist_to_database,
+            "Batch size": result.batch_size,
+            "Batches": result.batch_count,
             "Display": result.run_display,
             "Display src": result.display_source,
             "Raw output": result.raw_output_path,

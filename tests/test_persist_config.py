@@ -8,6 +8,7 @@ from vezilka_text_scraper.shared import env_variables
 from vezilka_text_scraper.shared.constants import (
     DEFAULT_DATABASE_TYPE,
     DEFAULT_PERSIST_ARTICLE_LIMIT,
+    DEFAULT_PERSIST_BATCH_SIZE,
 )
 from vezilka_text_scraper.shared.exceptions import ServiceError
 
@@ -27,6 +28,7 @@ def test_load_full_persist_config(
         """
 input_path: data/processed/sample.jsonl
 article_limit: 10
+batch_size: 9
 database:
   type: postgres
 """,
@@ -37,6 +39,7 @@ database:
 
     assert config.input_path == Path("data/processed/sample.jsonl")
     assert config.article_limit == 10
+    assert config.batch_size == 9
     assert config.database.type == "postgresql"
     assert config.database.url == "postgresql+psycopg://user:password@localhost:5432/vezilka"
     assert config.database.schema_name == "corpus"
@@ -50,6 +53,7 @@ def test_load_partial_persist_config_uses_defaults(tmp_path: Path) -> None:
 
     assert config.input_path is None
     assert config.article_limit == DEFAULT_PERSIST_ARTICLE_LIMIT
+    assert config.batch_size == DEFAULT_PERSIST_BATCH_SIZE
     assert config.database.type == DEFAULT_DATABASE_TYPE
     assert config.database.url == "sqlite:///data/vezilka_corpus.db"
     assert config.database.schema_name is None
@@ -59,6 +63,7 @@ def test_load_partial_persist_config_uses_defaults(tmp_path: Path) -> None:
     "config_text",
     [
         "article_limit: 0\n",
+        "batch_size: 0\n",
         "database:\n  type: mysql\n",
         "database:\n  type: sqlite\n  url: sqlite:///data/test.db\n",
         "database:\n  type: postgresql\n  schema: corpus\n",

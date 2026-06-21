@@ -8,6 +8,7 @@ from vezilka_text_scraper.shared.constants import (
     DEFAULT_CLEAN_CONFIG_PATH,
     DEFAULT_DISPLAY_CONFIG_PATH,
     DEFAULT_PERSIST_CONFIG_PATH,
+    DEFAULT_PIPELINE_BATCH_SIZE,
     DEFAULT_SCRAPE_CONFIG_PATH,
 )
 from vezilka_text_scraper.shared.exceptions import ServiceError
@@ -24,6 +25,7 @@ display_config_path: custom/display.yaml
 save_scraped_articles: false
 save_cleaned_articles: false
 persist_to_database: true
+batch_size: 11
 run_display: true
 display_source: database
 """,
@@ -39,6 +41,7 @@ display_source: database
     assert config.save_scraped_articles is False
     assert config.save_cleaned_articles is False
     assert config.persist_to_database is True
+    assert config.batch_size == 11
     assert config.run_display is True
     assert config.display_source == "database"
 
@@ -56,6 +59,7 @@ def test_load_partial_pipeline_config_uses_defaults(tmp_path: Path) -> None:
     assert config.save_scraped_articles is True
     assert config.save_cleaned_articles is True
     assert config.persist_to_database is False
+    assert config.batch_size == DEFAULT_PIPELINE_BATCH_SIZE
     assert config.run_display is True
     assert config.display_source == "file"
 
@@ -73,6 +77,7 @@ def test_load_partial_pipeline_config_uses_defaults(tmp_path: Path) -> None:
             "run_display: true\ndisplay_source: database\n"
         ),
         "display_source: api\n",
+        "batch_size: 0\n",
         "unknown_field: true\n",
     ],
 )

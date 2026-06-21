@@ -10,6 +10,7 @@ from vezilka_text_scraper.shared import env_variables
 from vezilka_text_scraper.shared.constants import (
     DEFAULT_DATABASE_TYPE,
     DEFAULT_PERSIST_ARTICLE_LIMIT,
+    DEFAULT_PERSIST_BATCH_SIZE,
     DEFAULT_PERSIST_INPUT_PATH,
 )
 
@@ -69,6 +70,7 @@ class PersistConfig(BaseModel):
 
     input_path: Path | None = DEFAULT_PERSIST_INPUT_PATH
     article_limit: int | None = Field(default=DEFAULT_PERSIST_ARTICLE_LIMIT, ge=1)
+    batch_size: int = Field(default=DEFAULT_PERSIST_BATCH_SIZE, ge=1)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
 
     model_config = ConfigDict(extra="forbid")
