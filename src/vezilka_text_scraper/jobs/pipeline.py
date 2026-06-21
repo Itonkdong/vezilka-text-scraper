@@ -57,6 +57,9 @@ class PipelineJobResult(BaseModel):
     clean_saved_count: int = Field(default=0, ge=0)
     clean_skipped_count: int = Field(default=0, ge=0)
     clean_failed_count: int = Field(default=0, ge=0)
+    safe_count: int = Field(default=0, ge=0)
+    caution_count: int = Field(default=0, ge=0)
+    restricted_count: int = Field(default=0, ge=0)
     persist_inserted_count: int = Field(default=0, ge=0)
     persist_updated_count: int = Field(default=0, ge=0)
     displayed_count: int = Field(default=0, ge=0)
@@ -141,6 +144,9 @@ class WikipediaPipelineJob:
             cleaned_count = 0
             clean_skipped_count = 0
             clean_failed_count = 0
+            safe_count = 0
+            caution_count = 0
+            restricted_count = 0
             batch_count = 0
             display_articles: list[CleanedArticle] = []
             display_page_ids: list[int] = []
@@ -189,6 +195,9 @@ class WikipediaPipelineJob:
                 cleaned_count += clean_collection.cleaned_count
                 clean_skipped_count += clean_collection.skipped_count
                 clean_failed_count += clean_collection.failed_count
+                safe_count += clean_collection.safe_count
+                caution_count += clean_collection.caution_count
+                restricted_count += clean_collection.restricted_count
 
                 if config.save_cleaned_articles:
                     clean_saved_count += self._cleaned_writer.write_article_batch(
@@ -228,6 +237,9 @@ class WikipediaPipelineJob:
                         "clean_saved_count": clean_saved_count,
                         "clean_skipped_count": clean_skipped_count,
                         "clean_failed_count": clean_failed_count,
+                        "safe_count": safe_count,
+                        "caution_count": caution_count,
+                        "restricted_count": restricted_count,
                         "persist_inserted_count": persist_inserted_count,
                         "persist_updated_count": persist_updated_count,
                     }
@@ -279,6 +291,9 @@ class WikipediaPipelineJob:
                 clean_saved_count=clean_saved_count,
                 clean_skipped_count=clean_skipped_count,
                 clean_failed_count=clean_failed_count,
+                safe_count=safe_count,
+                caution_count=caution_count,
+                restricted_count=restricted_count,
                 persist_inserted_count=persist_inserted_count,
                 persist_updated_count=persist_updated_count,
                 displayed_count=displayed_count,
@@ -356,6 +371,9 @@ class WikipediaPipelineJob:
             "Clean saved": result.clean_saved_count,
             "Clean skip": result.clean_skipped_count,
             "Clean failed": result.clean_failed_count,
+            "Safe": result.safe_count,
+            "Caution": result.caution_count,
+            "Restricted": result.restricted_count,
             "DB inserted": result.persist_inserted_count,
             "DB updated": result.persist_updated_count,
             "Displayed": result.displayed_count,

@@ -7,7 +7,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from vezilka_text_scraper.adapters.article_jsonl import (
     CleanedArticleJsonlWriter,
@@ -19,6 +19,8 @@ from vezilka_text_scraper.services.clean_config import CleanConfig
 from vezilka_text_scraper.services.configuration import ConfigurationService
 from vezilka_text_scraper.shared.constants import (
     DEFAULT_CLEAN_CONFIG_PATH,
+    SENSITIVITY_STATUS_CAUTION,
+    SENSITIVITY_STATUS_RESTRICTED,
     SENSITIVITY_STATUS_SAFE,
 )
 from vezilka_text_scraper.shared.exceptions import AdapterError, JobError, ServiceError
@@ -39,6 +41,9 @@ class CleanJobResult(BaseModel):
     cleaned_count: int
     skipped_count: int
     failed_count: int
+    safe_count: int = Field(default=0, ge=0)
+    caution_count: int = Field(default=0, ge=0)
+    restricted_count: int = Field(default=0, ge=0)
     batch_size: int
     batch_count: int
     duration_seconds: float
@@ -54,6 +59,9 @@ class CleanCollectionResult(BaseModel):
     cleaned_count: int
     skipped_count: int
     failed_count: int
+    safe_count: int = Field(default=0, ge=0)
+    caution_count: int = Field(default=0, ge=0)
+    restricted_count: int = Field(default=0, ge=0)
 
 
 class WikipediaCleanJob:
@@ -87,6 +95,9 @@ class WikipediaCleanJob:
         cleaned_count = 0
         skipped_count = 0
         failed_count = 0
+        safe_count = 0
+        caution_count = 0
+        restricted_count = 0
         batch_count = 0
         batch_size = 0
 
@@ -107,6 +118,9 @@ class WikipediaCleanJob:
                 cleaned_count += collected.cleaned_count
                 skipped_count += collected.skipped_count
                 failed_count += collected.failed_count
+                safe_count += collected.safe_count
+                caution_count += collected.caution_count
+                restricted_count += collected.restricted_count
                 try:
                     self._cleaned_writer.write_article_batch(
                         collected.cleaned_articles,
@@ -131,6 +145,9 @@ class WikipediaCleanJob:
                 cleaned_count=cleaned_count,
                 skipped_count=skipped_count,
                 failed_count=failed_count,
+                safe_count=safe_count,
+                caution_count=caution_count,
+                restricted_count=restricted_count,
                 batch_size=batch_size,
                 batch_count=batch_count,
                 duration_seconds=duration_seconds,
@@ -156,6 +173,9 @@ class WikipediaCleanJob:
                             cleaned_count=cleaned_count,
                             skipped_count=skipped_count,
                             failed_count=failed_count,
+                            safe_count=safe_count,
+                            caution_count=caution_count,
+                            restricted_count=restricted_count,
                             batch_size=batch_size,
                             batch_count=batch_count,
                             duration_seconds=duration_seconds,
@@ -177,6 +197,9 @@ class WikipediaCleanJob:
         cleaned_count = 0
         skipped_count = 0
         failed_count = 0
+        safe_count = 0
+        caution_count = 0
+        restricted_count = 0
         cleaned_at = datetime.now(UTC).isoformat()
 
         LOGGER.info(f"Loaded {read_count} raw articles")
@@ -205,6 +228,12 @@ class WikipediaCleanJob:
                         f"'{raw_article.title}' ({raw_article.page_id}); "
                         f"keywords={candidate.article.sensitivity_keywords}"
                     )
+                if candidate.article.sensitivity_status == SENSITIVITY_STATUS_SAFE:
+                    safe_count += 1
+                elif candidate.article.sensitivity_status == SENSITIVITY_STATUS_CAUTION:
+                    caution_count += 1
+                elif candidate.article.sensitivity_status == SENSITIVITY_STATUS_RESTRICTED:
+                    restricted_count += 1
                 cleaned_articles.append(candidate.article)
             except ServiceError as error:
                 failed_count += 1
@@ -225,6 +254,9 @@ class WikipediaCleanJob:
             cleaned_count=cleaned_count,
             skipped_count=skipped_count,
             failed_count=failed_count,
+            safe_count=safe_count,
+            caution_count=caution_count,
+            restricted_count=restricted_count,
         )
 
     def _format_final_summary(
@@ -243,6 +275,9 @@ class WikipediaCleanJob:
             "Cleaned": result.cleaned_count,
             "Skipped": result.skipped_count,
             "Failed": result.failed_count,
+            "Safe": result.safe_count,
+            "Caution": result.caution_count,
+            "Restricted": result.restricted_count,
             "Batch size": result.batch_size,
             "Batches": result.batch_count,
             "Duration": f"{result.duration_seconds:.2f}s",
