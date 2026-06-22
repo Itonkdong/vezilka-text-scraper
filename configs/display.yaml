@@ -1,4 +1,4 @@
-source: postgresql
+source: file
 input_path: null
-article_limit: 15
+article_limit: 10
 random_sample: true
