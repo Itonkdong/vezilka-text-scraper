@@ -8,7 +8,7 @@ categories:
 recursive: true
 max_depth: 2
 
-total_article_limit: 200
+total_article_limit: 1000
 per_category_article_limit: null
 
 include_redirects: false
