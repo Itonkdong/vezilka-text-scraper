@@ -1,6 +1,6 @@
-# Vezilka Text Scraper
+# WikiScrape
 
-Vezilka Text Scraper builds a Macedonian Wikipedia corpus for the Vezilka project. It scrapes raw article data, cleans MediaWiki markup into readable Macedonian text, optionally persists the corpus to SQLite or PostgreSQL, and can display samples for manual inspection.
+WikiScrape builds a Macedonian Wikipedia corpus. It scrapes raw article data, cleans MediaWiki markup into readable Macedonian text, optionally persists the corpus to SQLite or PostgreSQL, and can display samples for manual inspection.
 
 The project is organized as small jobs that can be run independently or through one full pipeline. Job behavior is controlled by YAML files in `configs/`; runtime/environment concerns such as logging and database connection values are controlled through `.env`.
 
@@ -147,7 +147,7 @@ Use the conda environment:
 
 ## Contribution
 
-This work was done by Viktor Kostadinoski as part of the Vezilka project, specifically the Doniraj Vezilka part of the project, under the supervision of prof. Dimitar Trajanov.
+This work was independently developed by Viktor Kostadinoski as preliminary work for the Vezilka project's Doniraj service, under the supervision of Prof. Dimitar Trajanov.
 
 ## License
 
