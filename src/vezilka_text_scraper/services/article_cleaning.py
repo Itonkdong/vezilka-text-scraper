@@ -43,10 +43,13 @@ CODE_LINE_PATTERN = re.compile(
     r"[{};]|(?:public|private|class|def|function|var|let|const|import)\b)",
     re.IGNORECASE,
 )
+EMPTY_LIST_LINE_PATTERN = re.compile(r"^[-–—*#•]+$")
 WHITESPACE_PATTERN = re.compile(r"[ \t]+")
 BLANK_LINES_PATTERN = re.compile(r"\n{3,}")
 TABLE_SECTION_MAX_PREAMBLE_WORDS = 40
 MIN_CODE_SECTION_LINES = 2
+CYRILLIC_START = "\u0400"
+CYRILLIC_END = "\u04ff"
 
 
 class CleanedArticleCandidate(BaseModel):
@@ -258,8 +261,9 @@ class ArticleCleaningService:
             return False
 
         cleaned_word_count = self._count_words(cleaned_content)
+        pre_table_text = raw_wikitext.split("{|", maxsplit=1)[0].strip()
         return (
-            cleaned_content.rstrip().endswith(":")
+            pre_table_text.endswith(":")
             and cleaned_word_count <= TABLE_SECTION_MAX_PREAMBLE_WORDS
         )
 
@@ -380,9 +384,38 @@ class ArticleCleaningService:
         return WHITESPACE_PATTERN.sub(" ", heading.strip())
 
     def _normalize_whitespace(self, text: str) -> str:
-        lines = [WHITESPACE_PATTERN.sub(" ", line).strip() for line in text.splitlines()]
-        text_without_trailing_spaces = "\n".join(line for line in lines if line)
+        normalized_lines: list[str] = []
+        for raw_line in text.splitlines():
+            line = WHITESPACE_PATTERN.sub(" ", raw_line).strip()
+            if not line:
+                continue
+            if self._should_remove_plain_text_line(line):
+                continue
+            normalized_lines.append(self._normalize_terminal_punctuation(line))
+
+        text_without_trailing_spaces = "\n".join(normalized_lines)
         return BLANK_LINES_PATTERN.sub("\n\n", text_without_trailing_spaces)
+
+    def _should_remove_plain_text_line(self, line: str) -> bool:
+        if EMPTY_LIST_LINE_PATTERN.fullmatch(line):
+            return True
+        return any(character.isalpha() for character in line) and not self._has_cyrillic(
+            line
+        )
+
+    def _has_cyrillic(self, line: str) -> bool:
+        return any(CYRILLIC_START <= character <= CYRILLIC_END for character in line)
+
+    def _normalize_terminal_punctuation(self, line: str) -> str:
+        if line.startswith("- "):
+            return line
+        if line.endswith((".", "!", "?", "…")):
+            return line
+        if line.endswith((",", ":", ";")):
+            return f"{line[:-1].rstrip()}."
+        if line[-1].isalnum() or line[-1] in {"“", "”", '"', "'"}:
+            return f"{line}."
+        return line
 
     def _build_clean_text(self, title: str, sections: list[CleanedSection]) -> str:
         parts = [title.strip()]
