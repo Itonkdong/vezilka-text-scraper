@@ -187,6 +187,51 @@ def test_cleaning_keeps_list_items_with_dash_markers() -> None:
     assert "- геодезија" in candidate.article.clean_text
 
 
+def test_cleaning_removes_empty_list_items_and_latin_only_rows() -> None:
+    raw_wikitext = """
+Корисен македонски вовед кој треба да остане:
+*
+*
+* PDF copy of select chapters
+* Ewald, P. P., editor 50 Years of X-Ray Diffraction
+* Македонска ставка
+"""
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext, title="Учебници"),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert "\n-\n" not in candidate.article.clean_text
+    assert "PDF copy" not in candidate.article.clean_text
+    assert "X-Ray Diffraction" not in candidate.article.clean_text
+    assert "Корисен македонски вовед кој треба да остане." in candidate.article.clean_text
+    assert "- Македонска ставка" in candidate.article.clean_text
+
+
+def test_cleaning_normalizes_dangling_paragraph_punctuation() -> None:
+    raw_wikitext = """
+Оваа реченица завршува со остаток од отстранет список:
+Оваа реченица завршува со остаток од отстранет дел,
+Оваа реченица нема завршна интерпункција
+"""
+    config = CleanConfig(min_word_count=0, min_section_word_count=0)
+
+    candidate = ArticleCleaningService().clean_article(
+        _raw_article(raw_wikitext),
+        config,
+        "2026-06-21T01:00:00+00:00",
+    )
+
+    assert "список." in candidate.article.clean_text
+    assert "дел." in candidate.article.clean_text
+    assert "интерпункција." in candidate.article.clean_text
+    assert "список:" not in candidate.article.clean_text
+    assert "дел," not in candidate.article.clean_text
+
+
 def test_cleaning_skips_sections_below_minimum_word_count() -> None:
     raw_wikitext = """
 Воведна содржина со доволно зборови за да остане како корисен текст.
